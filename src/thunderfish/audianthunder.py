@@ -138,11 +138,11 @@ class ThunderfishDialog(QDialog):
         self.eod_tabs.setMovable(True)
         self.eod_tabs.setTabBarAutoHide(False)
         self.eod_tabs.setTabsClosable(False)
-        tools = self.setup_toolbar()
+        self.tools = self.setup_toolbar()
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.tabs)
         vbox.addWidget(self.eod_tabs)
-        vbox.addWidget(tools)
+        vbox.addWidget(self.tools)
         
         # plot EODs:
         for k in range(len(eod_props)):
@@ -173,7 +173,7 @@ class ThunderfishDialog(QDialog):
                                     **pulse_spec_styles)
 
     def resizeEvent(self, event):
-        h = event.size().height()//2 - 10
+        h = (event.size().height() - self.tools.height())//2 - 10
         self.tabs.setMaximumHeight(h)
         self.eod_tabs.setMaximumHeight(h)
 
