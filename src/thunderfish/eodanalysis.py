@@ -263,7 +263,7 @@ def load_species_waveforms(species_file='none'):
     
     Parameters
     ----------
-    species_file: string
+    species_file: str
         Name of file containing species definitions. The content of
         this file is as follows:
         
@@ -299,14 +299,14 @@ def load_species_waveforms(species_file='none'):
     
     Returns
     -------
-    wave_names: list of strings
+    wave_names: list of str
         List of species names of wave-type fish.
     wave_eods: list of 2-D arrays
         List of EOD waveforms of wave-type fish corresponding to
         `wave_names`.  First column of a waveform is time in seconds,
         second column is the EOD waveform.  The waveforms contain
         exactly one EOD period.
-    pulse_names: list of strings
+    pulse_names: list of str
         List of species names of pulse-type fish.
     pulse_eods: list of 2-D arrays
         List of EOD waveforms of pulse-type fish corresponding to
@@ -627,10 +627,10 @@ def wave_quality(props, harm_relampl=None, min_freq=0.0,
         frequencies.  If False, keep it in the list of EOD
         frequencies, but remove it from the waveform properties if
         `skip_reason` is not empty.
-    skip_reason: string
+    skip_reason: str
         An empty string if the waveform is good, otherwise a string
         indicating the failure.
-    msg: string
+    msg: str
         A textual representation of the values tested.
     """
     remove = False
@@ -735,10 +735,10 @@ def pulse_quality(props, max_clipped_frac=0.1, max_rms_sem=0.0):
 
     Returns
     -------
-    skip_reason: string
+    skip_reason: str
         An empty string if the waveform is good, otherwise a string
         indicating the failure.
-    msg: string
+    msg: str
         A textual representation of the values tested.
     skipped_clipped: bool
         True if waveform was skipped because of clipping.
@@ -780,7 +780,7 @@ def plot_eod_recording(ax, data, rate, unit=None, width=0.1,
         Recorded data to be plotted.
     rate: float
         Sampling rate of the data in Hertz.
-    unit: string
+    unit: str
         Optional unit of the data used for y-label.
     width: float
         Width of data segment to be plotted in seconds.
@@ -901,7 +901,7 @@ def plot_eod_waveform(ax, eod_waveform, props, phases=None,
         Dictionary with phase properties as returned by
         `analyze_pulse_phases()`, `analyze_pulse()`, and
         `load_pulse_phases()`.
-    unit: string
+    unit: str
         Optional unit of the data used for y-label.
     wave_periods: float
         How many periods of a wave EOD are shown.
@@ -1330,11 +1330,11 @@ def save_eod_waveform(mean_eod, unit, idx, basename, **kwargs):
     mean_eod: 2D array of floats
         Averaged EOD waveform as returned by `eod_waveform()`,
         `analyze_wave()`, and `analyze_pulse()`.
-    unit: string
+    unit: str
         Unit of the waveform data.
     idx: int or None
         Index of fish.
-    basename: string or stream
+    basename: str or Path or stream
         If string, path and basename of file.
         If `basename` does not have an extension,
         '-eodwaveform', the fish index, and a file extension are appended.
@@ -1375,14 +1375,14 @@ def load_eod_waveform(file_path):
 
     Parameters
     ----------
-    file_path: string
+    file_path: str or Path
         Path of the file to be loaded.
 
     Returns
     -------
     mean_eod: 2D array of floats
         Averaged EOD waveform: time in seconds, mean, standard deviation, fit.
-    unit: string
+    unit: str
         Unit of EOD waveform.
 
     Raises
@@ -1416,17 +1416,17 @@ def parse_filename(file_path):
 
     Parameters
     ----------
-    file_path: string
+    file_path: str or Path
         Path of the file to be parsed.
 
     Returns
     -------
-    recording: string
+    recording: str
         Path and basename of the recording, i.e. 'PATH/RECORDING'.
         A leading './' is removed.
-    base_path: string
+    base_path: Path
         Path and basename of the analysis results,
-        i.e. 'PATH/RECORDING-CHANNEL-TIME'. A leading './' is removed.
+        i.e. 'PATH/RECORDING-CHANNEL-TIME'.
     channel: int
         Channel of the recording
         ('CHANNEL' component of the file name if present).
@@ -1435,7 +1435,7 @@ def parse_filename(file_path):
         Start time of analysis window in seconds
         ('TIME' component of the file name if present).
         `None` if not present in `file_path`.
-    ftype: string
+    ftype: str
         Type of analysis file (e.g. 'wavespectrum', 'pulsephases', etc.),
         ('FTYPE' component of the file name if present).
         See `file_types` for a list of all supported file types.
@@ -1444,7 +1444,7 @@ def parse_filename(file_path):
         Index of the EOD.
         ('N' component of the file name if present).
         -1 if not present in `file_path`.
-    ext: string
+    ext: str
         File extension *without* leading period
         ('EXT' component of the file name).
 
@@ -1484,7 +1484,7 @@ def save_analysis(output_basename, zip_file, eod_props, mean_eods, spec_data,
 
     Parameters
     ----------
-    output_basename: string
+    output_basename: str or Path
         Path and basename of files to be saved.
     zip_file: bool
         If `True`, write all analysis results into a zip archive.
@@ -1509,7 +1509,7 @@ def save_analysis(output_basename, zip_file, eod_props, mean_eods, spec_data,
         by `harmonics.harmonic_groups()`.
     wave_indices: array of int
         Indices identifying each fish in `wave_eodfs` or NaN.
-    unit: string
+    unit: str
         Unit of the waveform data.
     verbose: int
         Verbosity level.
@@ -1525,15 +1525,16 @@ def save_analysis(output_basename, zip_file, eod_props, mean_eods, spec_data,
             with io.StringIO() as df:
                 fp = save_func(*args, basename=df, **kwargs)
                 if fp is not None:
-                    fp = Path(output + str(fp))
+                    fp = Path(output.stem + str(fp))
                     zf.writestr(fp.name, df.getvalue())
                     if verbose > 0:
                         print('zipped file', fp.name)
 
-    
+
+    output_basename = Path(output_basename)                        
     if 'table_format' in kwargs and kwargs['table_format'] == 'py':
-        with open(output_basename + '.py', 'w') as f:
-            name = Path(output_basename).stem
+        with open(output_basename.with_suffix('.py'), 'w') as f:
+            name = output_basename.stem
             for k in range(len((spec_data))):
                 species = eod_props[k].get('species', '')
                 if len(pulse_data[k]) > 0:
@@ -1552,7 +1553,7 @@ def save_analysis(output_basename, zip_file, eod_props, mean_eods, spec_data,
     else:
         zf = None
         if zip_file:
-            zf = zipfile.ZipFile(output_basename + '.zip', 'w')
+            zf = zipfile.ZipFile(output_basename.with_suffix('.zip'), 'w')
         # all wave fish in wave_eodfs:
         if len(wave_eodfs) > 0:
             write_file_zip(zf, save_wave_eodfs, output_basename,
@@ -1592,7 +1593,7 @@ def load_analysis(file_pathes):
 
     Parameters
     ----------
-    file_pathes: list of string
+    file_pathes: list of str or Path
         Pathes of the analysis files of a single recording to be loaded.
 
     Returns
@@ -1621,11 +1622,11 @@ def load_analysis(file_pathes):
         deviations of Gaussians fitted to the pulse waveform.  Use the
         functions provided in thunderfish.fakefish to simulate pulse
         fish EODs from this data.
-    recording: string
+    recording: str
         Path and base name of the recording file.
     channel: int
         Analysed channel of the recording.
-    unit: string
+    unit: str
         Unit of EOD waveform.
     """
     recording = None
@@ -1715,7 +1716,7 @@ def load_recording(file_path, channel=0, load_kwargs={},
 
     Parameters
     ----------
-    file_path: string or Path
+    file_path: str or Path
         Full path of the file with the recorded data.
         Extension is optional. If absent, look for the first file
         with a reasonable extension.
@@ -1939,7 +1940,7 @@ def add_species_config(cfg, species_file='none', wave_max_rms=0.2,
     ----------
     cfg: ConfigFile
         The configuration.
-    species_file: string
+    species_file: str
         File path to a file containing species names and corresponding
         file names of EOD waveform templates. If 'none', no species
         assignemnt is performed.

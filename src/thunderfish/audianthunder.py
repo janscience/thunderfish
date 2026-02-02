@@ -1,3 +1,4 @@
+import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,10 +21,11 @@ from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import \
     NavigationToolbar2QT as NavigationToolbar
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout
+from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QFileDialog
 from PyQt5.QtWidgets import QWidget, QTabWidget, QToolBar, QAction, QStyle
 
 from thunderlab.powerspectrum import plot_decibel_psd, multi_psd
+from thunderlab.tabledata import write_table_args
 from .thunderfish import configuration, detect_eods
 from .thunderfish import rec_style, spectrum_style, eod_styles, snippet_style
 from .thunderfish import wave_spec_styles, pulse_spec_styles
@@ -32,18 +34,20 @@ from .harmonics import colors_markers, plot_harmonic_groups
 from .eodanalysis import plot_eod_recording, plot_pulse_eods
 from .eodanalysis import plot_eod_waveform, plot_eod_snippets
 from .eodanalysis import plot_wave_spectrum, plot_pulse_spectrum
+from .eodanalysis import save_analysis
 
 
 class ThunderfishDialog(QDialog):
 
-    def __init__(self, time, data, unit, ampl_max, file_path, cfg,
-                 parent, *args, **kwargs):
+    def __init__(self, time, data, unit, ampl_max, channel,
+                 file_path, cfg, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.time = time
         self.rate = 1/np.mean(np.diff(self.time))
         self.data = data
         self.unit = unit
         self.ampl_max = ampl_max
+        self.channel = channel
         self.cfg = cfg
         self.file_path = file_path
         self.navis = []
@@ -56,18 +60,23 @@ class ThunderfishDialog(QDialog):
             clip_amplitudes(self.data, max_ampl=self.ampl_max,
                             **clip_args(self.cfg, self.rate))
         # detect EODs in the data:
-        psd_data, wave_eodfs, wave_indices, eod_props, \
-        mean_eods, spec_data, phase_data, pulse_data, power_thresh, skip_reason, zoom_window = \
+        self.psd_data, self.wave_eodfs, self.wave_indices, self.eod_props, \
+        self.mean_eods, self.spec_data, self.phase_data, self.pulse_data, \
+        self.power_thresh, self.skip_reason, self.zoom_window = \
           detect_eods(self.data, self.rate,
                       min_clip=self.min_clip, max_clip=self.max_clip,
                       name=self.file_path, mode='wp',
                       verbose=1, plot_level=0, cfg=self.cfg)
+        # add analysis window to EOD properties:
+        for props in self.eod_props:
+            props['twin'] = time[0]
+            props['window'] = time[-1] - time[0]
         self.nwave = 0
         self.npulse = 0
-        for i in range(len(eod_props)):
-            if eod_props[i]['type'] == 'pulse':
+        for i in range(len(self.eod_props)):
+            if self.eod_props[i]['type'] == 'pulse':
                 self.npulse += 1
-            elif eod_props[i]['type'] == 'wave':
+            elif self.eod_props[i]['type'] == 'wave':
                 self.nwave += 1
         self.neods = self.nwave + self.npulse
         
@@ -89,20 +98,20 @@ class ThunderfishDialog(QDialog):
         trace_idx = self.tabs.addTab(canvas, 'Trace')
         ax = canvas.figure.subplots()
         twidth = 0.1
-        if len(eod_props) > 0:
-            if eod_props[0]['type'] == 'wave':
-                twidth = 5.0/eod_props[0]['EODf']
+        if len(self.eod_props) > 0:
+            if self.eod_props[0]['type'] == 'wave':
+                twidth = 5.0/self.eod_props[0]['EODf']
             else:
-                if len(wave_eodfs) > 0:
-                    twidth = 3.0/eod_props[0]['EODf']
+                if len(self.wave_eodfs) > 0:
+                    twidth = 3.0/self.eod_props[0]['EODf']
                 else:
-                    twidth = 10.0/eod_props[0]['EODf']
+                    twidth = 10.0/self.eod_props[0]['EODf']
         twidth = (1+twidth//0.005)*0.005
         plot_eod_recording(ax, self.data, self.rate, self.unit,
                            twidth, time[0], rec_style)
-        zoom_window = [1.2, 1.3]
-        plot_pulse_eods(ax, self.data, self.rate, zoom_window,
-                        twidth, eod_props, time[0],
+        self.zoom_window = [1.2, 1.3]
+        plot_pulse_eods(ax, self.data, self.rate, self.zoom_window,
+                        twidth, self.eod_props, time[0],
                         colors=self.pulse_colors,
                         markers=self.pulse_markers,
                         frameon=True, loc='upper right')
@@ -116,18 +125,18 @@ class ThunderfishDialog(QDialog):
         self.navis.append(navi)
         spec_idx = self.tabs.addTab(canvas, 'Spectrum')
         ax = canvas.figure.subplots()
-        if len(wave_eodfs) > 0:
-            plot_harmonic_groups(ax, wave_eodfs, wave_indices, max_groups=0,
-                                 skip_bad=True,
-                                 sort_by_freq=True, label_power=True,
+        if len(self.wave_eodfs) > 0:
+            plot_harmonic_groups(ax, self.wave_eodfs, self.wave_indices,
+                                 max_groups=0, skip_bad=False,
+                                 sort_by_freq=True, label_power=False,
                                  colors=self.wave_colors,
                                  markers=self.wave_markers,
                                  frameon=False, loc='upper right')
         deltaf = cfg.value('frequencyResolution')
-        if len(eod_props) > 0:
-            deltaf = 1.1*eod_props[0]['dfreq']
-        psd_data = multi_psd(self.data, self.rate, deltaf)[0]
-        plot_decibel_psd(ax, psd_data[:, 0], psd_data[:, 1],
+        if len(self.eod_props) > 0:
+            deltaf = 1.1*self.eod_props[0]['dfreq']
+        self.psd_data = multi_psd(self.data, self.rate, deltaf)[0]
+        plot_decibel_psd(ax, self.psd_data[:, 0], self.psd_data[:, 1],
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
         ax.yaxis.set_major_locator(plt.MaxNLocator(6))
@@ -136,7 +145,7 @@ class ThunderfishDialog(QDialog):
         else:
             self.tabs.setCurrentIndex(trace_idx)
 
-        if len(eod_props) > 0:
+        if len(self.eod_props) > 0:
             # tabs of EODs:
             self.eod_tabs = QTabWidget(self)
             self.eod_tabs.setDocumentMode(True)
@@ -146,31 +155,36 @@ class ThunderfishDialog(QDialog):
             vbox.addWidget(self.eod_tabs)
 
             # plot EODs:
-            for k in range(len(eod_props)):
-                props = eod_props[k]
+            for k in range(len(self.eod_props)):
+                props = self.eod_props[k]
                 n_snippets = 10
-                canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
+                canvas = FigureCanvas(Figure(figsize=(10, 5),
+                                             layout='constrained'))
                 navi = NavigationToolbar(canvas, self)
                 navi.hide()
                 self.navis.append(navi)
-                self.eod_tabs.addTab(canvas, f'EODf={eod_props[k]['EODf']:.0f}Hz')
+                self.eod_tabs.addTab(canvas,
+                                     f'{k}: {self.eod_props[k]['EODf']:.0f}Hz')
                 gs = canvas.figure.add_gridspec(2, 2)
                 axe = canvas.figure.add_subplot(gs[:, 0])
-                plot_eod_waveform(axe, mean_eods[k], eod_props[k], phase_data[k],
+                plot_eod_waveform(axe, self.mean_eods[k], props,
+                                  self.phase_data[k],
                                   unit=self.unit, **eod_styles)
                 if props['type'] == 'pulse' and 'times' in props:
                     plot_eod_snippets(axe, self.data, self.rate,
-                                      mean_eods[k][0, 0], mean_eods[k][-1, 0],
-                                      props['times'], n_snippets, props['flipped'],
+                                      self.mean_eods[k][0, 0],
+                                      self.mean_eods[k][-1, 0],
+                                      props['times'], n_snippets,
+                                      props['flipped'],
                                       props['aoffs'], snippet_style)
                 if props['type'] == 'wave':
                     axa = canvas.figure.add_subplot(gs[0, 1])
                     axp = canvas.figure.add_subplot(gs[1, 1], sharex=axa)
-                    plot_wave_spectrum(axa, axp, spec_data[k], props,
+                    plot_wave_spectrum(axa, axp, self.spec_data[k], props,
                                        unit=self.unit, **wave_spec_styles)
                 else:
                     axs = canvas.figure.add_subplot(gs[:, 1])
-                    plot_pulse_spectrum(axs, spec_data[k], props,
+                    plot_pulse_spectrum(axs, self.spec_data[k], props,
                                         **pulse_spec_styles)
         self.tools = self.setup_toolbar()
         vbox.addWidget(self.tools)
@@ -179,6 +193,22 @@ class ThunderfishDialog(QDialog):
         h = (event.size().height() - self.tools.height())//2 - 10
         self.tabs.setMaximumHeight(h)
         self.eod_tabs.setMaximumHeight(h)
+
+    def save(self):
+        base_name = self.file_path.with_suffix('.zip')
+        cstr = f'-c{self.channel}'
+        tstr = f'-t{self.time[0]:.0f}s'
+        base_name = base_name.with_stem(base_name.stem + cstr + tstr)
+        filters = ['All files (*)', 'ZIP files (*.zip)']
+        base_name = QFileDialog.getSaveFileName(self, 'Save analysis as',
+                                                os.fspath(base_name),
+                                                ';;'.join(filters))[0]
+        if base_name:
+            save_analysis(base_name, True, self.eod_props,
+                          self.mean_eods, self.spec_data,
+                          self.phase_data, self.pulse_data,
+                          self.wave_eodfs, self.wave_indices, self.unit, 0,
+                          **write_table_args(self.cfg))
 
     def home(self):
         for n in self.navis:
@@ -237,6 +267,13 @@ class ThunderfishDialog(QDialog):
         act.triggered.connect(self.pan)
         tools.addAction(act)
 
+        act = QAction('&Save', self)
+        act.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        act.setToolTip('Save analysis results to zip file (s)')
+        act.setShortcuts(['s', 'CTRL+S'])
+        act.triggered.connect(self.save)
+        tools.addAction(act)
+
         return tools
             
 
@@ -253,12 +290,11 @@ class ThunderfishAnalyzer(Analyzer):
         
     def analyze(self, t0, t1, channel, traces):
         time, data = traces[self.source_name]
-        self.dialog = ThunderfishDialog(time, data, self.source.unit,
-                                        self.source.ampl_max,
-                                        self.browser.data.file_path,
-                                        self.cfg, self.browser)
-        self.dialog.finished.connect(lambda x: [None for self.dialog in [None]])
-        self.dialog.show()
+        dialog = ThunderfishDialog(time, data, self.source.unit,
+                                   self.source.ampl_max, channel,
+                                   self.browser.data.file_path,
+                                   self.cfg, self.browser)
+        dialog.show()
 
 
 def audian_analyzer(browser):
