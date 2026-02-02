@@ -74,10 +74,12 @@ class ThunderfishDialog(QDialog):
         # dialog:
         QShortcut('q', self).activated.connect(self.accept)
         QShortcut('Ctrl+Q', self).activated.connect(self.accept)
+        vbox = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
         self.tabs.setDocumentMode(True)
         self.tabs.setMovable(True)
         self.tabs.setTabsClosable(False)
+        vbox.addWidget(self.tabs)
         
         # tab with recording trace:
         canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
@@ -121,8 +123,10 @@ class ThunderfishDialog(QDialog):
                                  colors=self.wave_colors,
                                  markers=self.wave_markers,
                                  frameon=False, loc='upper right')
-        psd_data = multi_psd(self.data, self.rate,
-                             1.1*eod_props[0]['dfreq'])[0]
+        deltaf = cfg.value('frequencyResolution')
+        if len(eod_props) > 0:
+            deltaf = 1.1*eod_props[0]['dfreq']
+        psd_data = multi_psd(self.data, self.rate, deltaf)[0]
         plot_decibel_psd(ax, psd_data[:, 0], psd_data[:, 1],
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
@@ -132,45 +136,44 @@ class ThunderfishDialog(QDialog):
         else:
             self.tabs.setCurrentIndex(trace_idx)
 
-        # tabs of EODs:
-        self.eod_tabs = QTabWidget(self)
-        self.eod_tabs.setDocumentMode(True)
-        self.eod_tabs.setMovable(True)
-        self.eod_tabs.setTabBarAutoHide(False)
-        self.eod_tabs.setTabsClosable(False)
+        if len(eod_props) > 0:
+            # tabs of EODs:
+            self.eod_tabs = QTabWidget(self)
+            self.eod_tabs.setDocumentMode(True)
+            self.eod_tabs.setMovable(True)
+            self.eod_tabs.setTabBarAutoHide(False)
+            self.eod_tabs.setTabsClosable(False)
+            vbox.addWidget(self.eod_tabs)
+
+            # plot EODs:
+            for k in range(len(eod_props)):
+                props = eod_props[k]
+                n_snippets = 10
+                canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
+                navi = NavigationToolbar(canvas, self)
+                navi.hide()
+                self.navis.append(navi)
+                self.eod_tabs.addTab(canvas, f'EODf={eod_props[k]['EODf']:.0f}Hz')
+                gs = canvas.figure.add_gridspec(2, 2)
+                axe = canvas.figure.add_subplot(gs[:, 0])
+                plot_eod_waveform(axe, mean_eods[k], eod_props[k], phase_data[k],
+                                  unit=self.unit, **eod_styles)
+                if props['type'] == 'pulse' and 'times' in props:
+                    plot_eod_snippets(axe, self.data, self.rate,
+                                      mean_eods[k][0, 0], mean_eods[k][-1, 0],
+                                      props['times'], n_snippets, props['flipped'],
+                                      props['aoffs'], snippet_style)
+                if props['type'] == 'wave':
+                    axa = canvas.figure.add_subplot(gs[0, 1])
+                    axp = canvas.figure.add_subplot(gs[1, 1], sharex=axa)
+                    plot_wave_spectrum(axa, axp, spec_data[k], props,
+                                       unit=self.unit, **wave_spec_styles)
+                else:
+                    axs = canvas.figure.add_subplot(gs[:, 1])
+                    plot_pulse_spectrum(axs, spec_data[k], props,
+                                        **pulse_spec_styles)
         self.tools = self.setup_toolbar()
-        vbox = QVBoxLayout(self)
-        vbox.addWidget(self.tabs)
-        vbox.addWidget(self.eod_tabs)
         vbox.addWidget(self.tools)
-        
-        # plot EODs:
-        for k in range(len(eod_props)):
-            props = eod_props[k]
-            n_snippets = 10
-            canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
-            navi = NavigationToolbar(canvas, self)
-            navi.hide()
-            self.navis.append(navi)
-            self.eod_tabs.addTab(canvas, f'EODf={eod_props[k]['EODf']:.0f}Hz')
-            gs = canvas.figure.add_gridspec(2, 2)
-            axe = canvas.figure.add_subplot(gs[:, 0])
-            plot_eod_waveform(axe, mean_eods[k], eod_props[k], phase_data[k],
-                              unit=self.unit, **eod_styles)
-            if props['type'] == 'pulse' and 'times' in props:
-                plot_eod_snippets(axe, self.data, self.rate,
-                                  mean_eods[k][0, 0], mean_eods[k][-1, 0],
-                                  props['times'], n_snippets, props['flipped'],
-                                  props['aoffs'], snippet_style)
-            if props['type'] == 'wave':
-                axa = canvas.figure.add_subplot(gs[0, 1])
-                axp = canvas.figure.add_subplot(gs[1, 1], sharex=axa)
-                plot_wave_spectrum(axa, axp, spec_data[k], props,
-                                   unit=self.unit, **wave_spec_styles)
-            else:
-                axs = canvas.figure.add_subplot(gs[:, 1])
-                plot_pulse_spectrum(axs, spec_data[k], props,
-                                    **pulse_spec_styles)
 
     def resizeEvent(self, event):
         h = (event.size().height() - self.tools.height())//2 - 10
@@ -239,8 +242,8 @@ class ThunderfishDialog(QDialog):
 
 class ThunderfishAnalyzer(Analyzer):
     
-    def __init__(self, browser, source_name):
-        super().__init__(browser, 'thunderfish', source_name)
+    def __init__(self, browser):
+        super().__init__(browser, 'thunderfish', 'filtered')
         self.dialog = None
         # configure:
         cfgfile = Path(__package__ + '.cfg')
@@ -261,7 +264,7 @@ class ThunderfishAnalyzer(Analyzer):
 def audian_analyzer(browser):
     browser.remove_analyzer('plain')
     browser.remove_analyzer('statistics')
-    ThunderfishAnalyzer(browser, 'data')
+    ThunderfishAnalyzer(browser)
 
 
 def main():
