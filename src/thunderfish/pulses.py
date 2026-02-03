@@ -343,7 +343,7 @@ def extract_pulsefish(data, rate, amax, width_factor_shape=3,
                           width_fac=np.max([width_factor_shape,
                                             width_factor_display,
                                             width_factor_wave]),
-                          verbose=verbose-1, return_data=True)
+                          verbose=verbose, return_data=True)
         log_dict.update(pd_log_dict)
     else:
         x_peak, x_trough, eod_heights, eod_widths = \
@@ -351,7 +351,7 @@ def extract_pulsefish(data, rate, amax, width_factor_shape=3,
                           width_fac=np.max([width_factor_shape,
                                             width_factor_display,
                                             width_factor_wave]),
-                          verbose=verbose-1, return_data=False)
+                          verbose=verbose, return_data=False)
     
     if len(x_peak) > 0:
         # cluster
@@ -362,7 +362,7 @@ def extract_pulsefish(data, rate, amax, width_factor_shape=3,
                                                 width_factor_shape,
                                                 width_factor_wave,
                                                 merge_threshold_height=0.1*amax,
-                                                verbose=verbose-1,
+                                                verbose=verbose,
                                                 plot_level=plot_level-1,
                                                 save_plots=save_plots,
                                                 save_path=save_path,
@@ -372,31 +372,35 @@ def extract_pulsefish(data, rate, amax, width_factor_shape=3,
         # extract mean eods and times
         mean_eods, eod_times, eod_peaktimes, eod_troughtimes, cluster_labels = \
           extract_means(i_data, x_merge, x_peak, x_trough, eod_widths, clusters,
-                        i_rate, width_factor_display, verbose=verbose-1)
+                        i_rate, width_factor_display, verbose=verbose)
 
         # determine clipped clusters (save them, but ignore in other steps)
         clusters, clipped_eods, clipped_times, clipped_peaktimes, clipped_troughtimes = \
-          find_clipped_clusters(clusters, mean_eods, eod_times, eod_peaktimes,
-                                eod_troughtimes, cluster_labels, width_factor_display,
-                                verbose=verbose-1)
+          find_clipped_clusters(clusters, mean_eods, eod_times,
+                                eod_peaktimes, eod_troughtimes,
+                                cluster_labels, width_factor_display,
+                                verbose=verbose)
 
         # delete the moving fish
         clusters, zoom_window, mf_log_dict = \
           delete_moving_fish(clusters, x_merge/i_rate, len(data)/rate,
                              eod_heights, eod_widths/i_rate, i_rate,
-                             verbose=verbose-1, plot_level=plot_level-1, save_plot=save_plots,
-                             save_path=save_path, ftype=ftype, return_data=return_data)
+                             verbose=verbose, plot_level=plot_level-1,
+                             save_plot=save_plots,
+                             save_path=save_path, ftype=ftype,
+                             return_data=return_data)
         
         if 'moving_fish' in return_data:
             log_dict['moving_fish'] = mf_log_dict
 
         clusters = remove_sparse_detections(clusters, eod_widths, i_rate,
-                                            len(data)/rate, verbose=verbose-1)
+                                            len(data)/rate, verbose=verbose)
 
         # extract mean eods
         mean_eods, eod_times, eod_peaktimes, eod_troughtimes, cluster_labels = \
           extract_means(i_data, x_merge, x_peak, x_trough, eod_widths,
-                        clusters, i_rate, width_factor_display, verbose=verbose-1)
+                        clusters, i_rate, width_factor_display,
+                        verbose=verbose)
 
         mean_eods.extend(clipped_eods)
         eod_times.extend(clipped_times)
@@ -415,6 +419,9 @@ def extract_pulsefish(data, rate, amax, width_factor_shape=3,
             log_dict['eod_troughtimes'] = eod_troughtimes
         
         log_dict.update(c_log_dict)
+        
+    if verbose > 0:
+        print('')
 
     return mean_eods, eod_times, eod_peaktimes, zoom_window, log_dict
 

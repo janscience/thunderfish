@@ -15,14 +15,17 @@ except ImportError:
     print()
     sys.exit(1)
 
+from io import StringIO
 from pathlib import Path
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import \
     NavigationToolbar2QT as NavigationToolbar
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QFileDialog
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout
 from PyQt5.QtWidgets import QWidget, QTabWidget, QToolBar, QAction, QStyle
+from PyQt5.QtWidgets import QLabel, QScrollArea, QFileDialog
 
 from thunderlab.powerspectrum import plot_decibel_psd, multi_psd
 from thunderlab.tabledata import write_table_args
@@ -55,6 +58,9 @@ class ThunderfishDialog(QDialog):
         self.pulse_colors = self.pulse_colors[3:]
         self.pulse_markers = self.pulse_markers[3:]
         self.wave_colors, self.wave_markers = colors_markers()
+        # collect stdout:
+        orig_stdout = sys.stdout
+        sys.stdout = StringIO()
         # clipping amplitudes:
         self.min_clip, self.max_clip = \
             clip_amplitudes(self.data, max_ampl=self.ampl_max,
@@ -66,7 +72,7 @@ class ThunderfishDialog(QDialog):
           detect_eods(self.data, self.rate,
                       min_clip=self.min_clip, max_clip=self.max_clip,
                       name=self.file_path, mode='wp',
-                      verbose=1, plot_level=0, cfg=self.cfg)
+                      verbose=2, plot_level=0, cfg=self.cfg)
         # add analysis window to EOD properties:
         for props in self.eod_props:
             props['twin'] = time[0]
@@ -79,6 +85,9 @@ class ThunderfishDialog(QDialog):
             elif self.eod_props[i]['type'] == 'wave':
                 self.nwave += 1
         self.neods = self.nwave + self.npulse
+        # read out stdout:
+        log = sys.stdout.getvalue()
+        sys.stdout = orig_stdout
         
         # dialog:
         QShortcut('q', self).activated.connect(self.accept)
@@ -89,6 +98,18 @@ class ThunderfishDialog(QDialog):
         self.tabs.setMovable(True)
         self.tabs.setTabsClosable(False)
         vbox.addWidget(self.tabs)
+
+        # log messages:
+        self.log = QLabel(self)
+        self.log.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.log.setText(log)
+        self.log.setFont(QFont('monospace'))
+        self.log.setMinimumSize(self.log.sizeHint())
+        self.scroll = QScrollArea(self)
+        self.scroll.setWidget(self.log)
+        #vsb = self.scroll.verticalScrollBar()
+        #vsb.setValue(vsb.maximum())
+        self.tabs.addTab(self.scroll, 'Log')
         
         # tab with recording trace:
         canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
