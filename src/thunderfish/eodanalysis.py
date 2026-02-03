@@ -1041,27 +1041,31 @@ def plot_eod_waveform(ax, eod_waveform, props, phases=None,
             left_eod = magnification_factor*eod[:i0]
             magnification_mask[:i0] = True
             ax.plot(time[:i0], left_eod, zorder=40, **magnified_style)
+            ta = None
             if left_eod[-1] > 0:
                 it = np.argmax(left_eod > 0.95*np.max(eod))
                 if it < len(left_eod)//2:
                     it = len(left_eod) - 1
-                ty = left_eod[it] if left_eod[it] < np.max(eod) else np.max(eod)
-                ta = ax.text(time[it], ty, f'x{magnification_factor:.0f} ',
-                             ha='right', va='top', zorder=100,
-                             fontsize=fontsize)
-                if ty > 0.5*ylim:
-                    quadrants[0, 0] += 1
+                if time[it] - 3*xfs > xlim_l:
+                    ty = left_eod[it] if left_eod[it] < np.max(eod) else np.max(eod)
+                    ta = ax.text(time[it], ty, f'x{magnification_factor:.0f} ',
+                                 ha='right', va='top', zorder=100,
+                                 fontsize=fontsize)
+                    if ty > 0.5*ylim:
+                        quadrants[0, 0] += 1
             else:
                 it = np.argmax(left_eod < 0.95*np.min(eod))
                 if it < len(left_eod)//2:
                     it = len(left_eod) - 1
-                ty = left_eod[it] if left_eod[it] > np.min(eod) else np.min(eod)
-                ta = ax.text(time[it], ty, f'x{magnification_factor:.0f} ',
-                             ha='right', va='bottom', zorder=100,
-                             fontsize=fontsize)
-                if ty < -0.5*ylim:
-                    quadrants[1, 0] += 1
-            texts.append(ta)
+                if time[it] - 3*xfs > xlim_l:
+                    ty = left_eod[it] if left_eod[it] > np.min(eod) else np.min(eod)
+                    ta = ax.text(time[it], ty, f'x{magnification_factor:.0f} ',
+                                 ha='right', va='bottom', zorder=100,
+                                 fontsize=fontsize)
+                    if ty < -0.5*ylim:
+                        quadrants[1, 0] += 1
+            if ta is not None:
+                texts.append(ta)
             left_snip = left_eod[time[:i0] < 0.1*xlim_l]
             if len(left_snip) > 0:
                 if quadrants[0, 0] == 0:

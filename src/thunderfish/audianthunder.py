@@ -108,6 +108,10 @@ class ThunderfishDialog(QDialog):
         #vsb = self.scroll.verticalScrollBar()
         #vsb.setValue(vsb.maximum())
         self.tabs.addTab(self.scroll, 'Log')
+
+        # plots:
+        plt.rcParams['axes.spines.top'] = False
+        plt.rcParams['axes.spines.right'] = False
         
         # tab with recording trace:
         canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
@@ -309,13 +313,8 @@ class ThunderfishDialog(QDialog):
         act.setShortcuts(['p'])
         act.triggered.connect(self.pan)
         tools.addAction(act)
-
-        act = QAction('&Save', self)
-        act.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        act.setToolTip('Save analysis results to zip file (s)')
-        act.setShortcuts(['s', 'CTRL+S'])
-        act.triggered.connect(self.save)
-        tools.addAction(act)
+        
+        tools.addSeparator()
 
         act = QAction('&Maximize', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_TitleBarMaxButton))
@@ -328,6 +327,15 @@ class ThunderfishDialog(QDialog):
         act.setToolTip('Fullscreen window (f)')
         act.setShortcuts(['f'])
         act.triggered.connect(self.toggle_fullscreen)
+        tools.addAction(act)
+
+        tools.addSeparator()
+
+        act = QAction('&Save', self)
+        act.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        act.setToolTip('Save analysis results to zip file (s)')
+        act.setShortcuts(['s', 'CTRL+S'])
+        act.triggered.connect(self.save)
         tools.addAction(act)
 
         return tools
@@ -360,8 +368,6 @@ def audian_analyzer(browser):
 
 
 def main():
-    plt.rcParams['axes.spines.top'] = False
-    plt.rcParams['axes.spines.right'] = False
     plugins = Plugins()
     plugins.add_analyzer_factory(audian_analyzer)
     audian_cli(sys.argv[1:], plugins)
