@@ -23,11 +23,11 @@ from matplotlib.backends.backend_qtagg import \
     NavigationToolbar2QT as NavigationToolbar
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout
+from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QHBoxLayout
 from PyQt5.QtWidgets import QWidget, QTabWidget, QToolBar, QAction, QStyle
-from PyQt5.QtWidgets import QLabel, QScrollArea, QFileDialog
+from PyQt5.QtWidgets import QPushButton, QLabel, QScrollArea, QFileDialog
 
-from thunderlab.powerspectrum import plot_decibel_psd, multi_psd
+from thunderlab.powerspectrum import decibel, plot_decibel_psd, multi_psd
 from thunderlab.tabledata import write_table_args
 from .thunderfish import configuration, detect_eods
 from .thunderfish import rec_style, spectrum_style, eod_styles, snippet_style
@@ -90,8 +90,6 @@ class ThunderfishDialog(QDialog):
         sys.stdout = orig_stdout
         
         # dialog:
-        QShortcut('q', self).activated.connect(self.accept)
-        QShortcut('Ctrl+Q', self).activated.connect(self.accept)
         vbox = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
         self.tabs.setDocumentMode(True)
@@ -146,6 +144,9 @@ class ThunderfishDialog(QDialog):
         self.navis.append(navi)
         spec_idx = self.tabs.addTab(canvas, 'Spectrum')
         ax = canvas.figure.subplots()
+        if self.power_thresh is not None:
+            ax.plot(self.power_thresh[:, 0], decibel(self.power_thresh[:, 1]),
+                    '#CCCCCC', lw=1)
         if len(self.wave_eodfs) > 0:
             plot_harmonic_groups(ax, self.wave_eodfs, self.wave_indices,
                                  max_groups=0, skip_bad=False,
@@ -208,12 +209,33 @@ class ThunderfishDialog(QDialog):
                     plot_pulse_spectrum(axs, self.spec_data[k], props,
                                         **pulse_spec_styles)
         self.tools = self.setup_toolbar()
-        vbox.addWidget(self.tools)
+        close = QPushButton('&Close', self)
+        close.pressed.connect(self.accept)
+        QShortcut('q', self).activated.connect(close.animateClick)
+        QShortcut('Ctrl+Q', self).activated.connect(close.animateClick)
+        hbox = QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.addWidget(self.tools)
+        hbox.addWidget(QLabel())
+        hbox.addWidget(close)
+        vbox.addLayout(hbox)
 
     def resizeEvent(self, event):
         h = (event.size().height() - self.tools.height())//2 - 10
         self.tabs.setMaximumHeight(h)
         self.eod_tabs.setMaximumHeight(h)
+
+    def toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
 
     def save(self):
         base_name = self.file_path.with_suffix('.zip')
@@ -293,6 +315,19 @@ class ThunderfishDialog(QDialog):
         act.setToolTip('Save analysis results to zip file (s)')
         act.setShortcuts(['s', 'CTRL+S'])
         act.triggered.connect(self.save)
+        tools.addAction(act)
+
+        act = QAction('&Maximize', self)
+        act.setIcon(self.style().standardIcon(QStyle.SP_TitleBarMaxButton))
+        act.setToolTip('Maximize window (m)')
+        act.setShortcuts(['m', 'Ctrl+M', 'Ctrl+Shift+M'])
+        act.triggered.connect(self.toggle_maximize)
+        tools.addAction(act)
+
+        act = QAction('&Fullscreen', self)
+        act.setToolTip('Fullscreen window (f)')
+        act.setShortcuts(['f'])
+        act.triggered.connect(self.toggle_fullscreen)
         tools.addAction(act)
 
         return tools
