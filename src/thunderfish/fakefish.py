@@ -1023,7 +1023,7 @@ def generate_testfiles(log_spec=True):
     from scipy.signal import find_peaks
     from audioio import write_audio
     from thunderlab.eventdetection import snippets
-    from .eodanalysis import pulse_spectrum
+    from .pulseanalysis import pulse_spectrum
 
     np.seterr(all="ignore")
     rng = np.random.default_rng()
