@@ -1018,6 +1018,11 @@ def generate_testfiles(log_spec=True):
     log_spec: bool
         If True, plot decibel agains logarithmic frequency axis.
         If False, plot energy agains linear frequency axis.
+
+    Returns
+    -------
+    files: list of str
+        List of generated files.
     """
     import matplotlib.pyplot as plt
     from scipy.signal import find_peaks
@@ -1047,6 +1052,7 @@ def generate_testfiles(log_spec=True):
                        amplitudes=(1.0, -1.0),
                        stdevs=(sigmat, sigmat))
     triphasic = dict(name='triphasic', **Triphasic_phases)
+    files = []
     for pulse in [monophasic, biphasic30, biphasic60, biphasic100, triphasic]:
         print(pulse['name'], '...')
         # fake recording:
@@ -1059,6 +1065,7 @@ def generate_testfiles(log_spec=True):
         metadata = dict(gain=f'{1/fac:.3f}mV')
         write_audio(pulse['name'] + '.wav', fac*data, rate, metadata)
         print(f'  wrote {pulse['name']}.wav')
+        files.append(pulse['name'] + '.wav')
         # average EOD pulse:
         tmax = 0.002
         idxs, _ = find_peaks(data, prominence=0.9*eoda)
@@ -1083,6 +1090,7 @@ def generate_testfiles(log_spec=True):
         np.savetxt(pulse['name'] + '.csv', spec_data, fmt='%g', delimiter=';',
                    header='f/Hz;real;imag;ampl;energy;level/dB')
         print(f'  wrote {pulse['name']}.csv')
+        files.append(pulse['name'] + '.csv')
         # numerical spectrum:
         nfreqs, nenergy = pulse_spectrum(eod_data, rate, 1.0, 0.05)
         nlevel = 10*np.log10(nenergy/np.max(energy))
@@ -1137,6 +1145,8 @@ def generate_testfiles(log_spec=True):
         plt.show()
         plt.close(fig)
         print(f'  wrote {pulse['name']}.pdf')
+        files.append(pulse['name'] + '.pdf')
+    return files
         
 
 def demo():
@@ -1158,7 +1168,7 @@ def demo():
                                noise_std=0.02, jitter_cv=0.1, first_pulse=inset_len/2)
     time = np.arange(len(wavefish))/rate
 
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(19, 10))
+    fig, ax = plt.subplots(2, 2, figsize=(19, 10), layout='constrained')
 
     # get proper wavefish ylim
     ymin = np.min(wavefish)
@@ -1199,8 +1209,6 @@ def demo():
             c_ax.set_xlabel('Time [sec]')
             c_ax.set_ylabel('Amplitude')
 
-    plt.tight_layout()
-
     # chirps:
     chirps_freq = chirps(600.0, rate, duration)
     chirps_data = wavefish_eods('Alepto', chirps_freq, rate)
@@ -1210,7 +1218,7 @@ def demo():
     rises_data = wavefish_eods('Alepto', rises_freq, rate)
 
     nfft = 256
-    fig, ax = plt.subplots(nrows=2, ncols=1, figsize=(19, 10))
+    fig, ax = plt.subplots(2, 1, figsize=(19, 10), layout='constrained')
     ax[0].set_title('Chirps')
     ax[0].specgram(chirps_data, Fs=rate, NFFT=nfft, noverlap=nfft//16)
     time = np.arange(len(chirps_freq))/rate
@@ -1226,7 +1234,6 @@ def demo():
     ax[1].set_ylim(500.0, 700.0)
     ax[1].set_ylabel('Frequency [Hz]')
     ax[1].set_xlabel('Time [s]')
-    plt.tight_layout()
 
     plt.show()
 

@@ -53,8 +53,9 @@ import os
 import io
 import zipfile
 import numpy as np
+
 try:
-    import matplotlib.pyplot as plt
+    from matplotlib.ticker import MultipleLocator
 except ImportError:
     pass
 
@@ -67,13 +68,9 @@ from thunderlab.dataloader import DataLoader
 
 from .fakefish import normalize_pulsefish, export_pulsefish
 from .fakefish import normalize_wavefish, export_wavefish
-from .waveanalysis import waveeod_waveform, analyze_wave
-from .waveanalysis import plot_wave_spectrum
 from .waveanalysis import save_wave_eodfs, load_wave_eodfs
 from .waveanalysis import save_wave_fish, load_wave_fish
 from .waveanalysis import save_wave_spectrum, load_wave_spectrum
-from .pulseanalysis import analyze_pulse
-from .pulseanalysis import plot_pulse_eods, plot_pulse_spectrum
 from .pulseanalysis import save_pulse_fish, load_pulse_fish
 from .pulseanalysis import save_pulse_spectrum, load_pulse_spectrum
 from .pulseanalysis import save_pulse_phases, load_pulse_phases
@@ -876,9 +873,8 @@ def plot_eod_waveform(ax, eod_waveform, props, phases=None,
                       sem_style=dict(color='0.8'),
                       fit_style=dict(lw=1.5, color='tab:blue'),
                       phase_style=dict(zorder=0, ls='', marker='o', color='tab:red',
-                                       markersize=6, mec='none', mew=0,
-                                       alpha=0.4),
-                      zerox_style=dict(zorder=50, ls='', marker='o', color='tab:red',
+                                       markersize=5, mec='white', mew=1),
+                      zerox_style=dict(zorder=50, ls='', marker='o', color='black',
                                        markersize=5, mec='white', mew=1),
                       zero_style=dict(lw=0.5, color='0.7'),
                       fontsize='medium'):
@@ -971,11 +967,11 @@ def plot_eod_waveform(ax, eod_waveform, props, phases=None,
         xlim = w
     ax.set_xlim(xlim_l, xlim_r)
     if xlim < 2:
-        ax.xaxis.set_major_locator(plt.MultipleLocator(0.5))
+        ax.xaxis.set_major_locator(MultipleLocator(0.5))
     elif xlim < 4:
-        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+        ax.xaxis.set_major_locator(MultipleLocator(1))
     elif xlim < 8:
-        ax.xaxis.set_major_locator(plt.MultipleLocator(2))
+        ax.xaxis.set_major_locator(MultipleLocator(2))
     ax.set_xlabel('Time [msec]')
     # amplitude axis:                
     ylim = np.max(np.abs(eod[(time >= xlim_l) & (time <= xlim_r)])) 
@@ -2051,7 +2047,8 @@ def pulse_quality_args(cfg):
 def main():
     import matplotlib.pyplot as plt
     from .fakefish import pulsefish_eods
-
+    from .pulseanalysis import analyze_pulse
+    
     print('Analysis of EOD waveforms.')
 
     # data:

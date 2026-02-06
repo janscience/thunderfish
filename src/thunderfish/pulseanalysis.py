@@ -48,10 +48,6 @@ Calls all the functions listed above:
 """
 
 import numpy as np
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    pass
 
 from pathlib import Path
 from scipy.optimize import curve_fit, minimize
@@ -1975,6 +1971,7 @@ def load_pulse_times(file_path):
 
 
 def main():
+    import matplotlib.pyplot as plt
     from thunderlab.eventdetection import snippets
     from .fakefish import pulsefish_eods, export_pulsefish
     from .eodanalysis import plot_eod_waveform
@@ -2000,7 +1997,7 @@ def main():
     export_pulsefish(pulses, '', 'Triphasic spec')
 
     # plot:
-    fig, axs = plt.subplots(1, 2)
+    fig, axs = plt.subplots(1, 2, layout='constrained')
     plot_eod_waveform(axs[0], mean_eod, props, peaks, unit=unit)
     axs[0].set_title(f'pulse fish: EODf = {props["EODf"]:.1f} Hz')
     plot_pulse_spectrum(axs[1], energy, props)

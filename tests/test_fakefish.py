@@ -139,6 +139,13 @@ def test_generate_waveform():
     os.remove('testeod.inp')
 
     
+def test_generate_testfiles():
+    fls = ff.generate_testfiles(False)
+    fls = ff.generate_testfiles(True)
+    for fn in fls:
+        os.remove(fn)
+
+        
 def test_main():
     ff.main(['-h'])
     ff.main()

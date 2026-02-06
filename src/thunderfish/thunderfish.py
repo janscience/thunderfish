@@ -53,11 +53,11 @@ from .harmonics import harmonic_groups, harmonic_groups_args, psd_peak_detection
 from .harmonics import colors_markers, plot_harmonic_groups
 from .consistentfishes import consistent_fishes
 from .fakefish import pulsefish_spectrum
-from .eodanalysis import eod_waveform, waveeod_waveform, analyze_wave, analyze_pulse
+from .pulseanalysis import analyze_pulse, plot_pulse_eods, plot_pulse_spectrum
+from .waveanalysis import waveeod_waveform, analyze_wave, plot_wave_spectrum
+from .eodanalysis import eod_waveform
 from .eodanalysis import unfilter, clipped_fraction
-from .eodanalysis import plot_eod_recording, plot_pulse_eods
-from .eodanalysis import plot_eod_waveform, plot_eod_snippets
-from .eodanalysis import plot_pulse_spectrum, plot_wave_spectrum
+from .eodanalysis import plot_eod_recording, plot_eod_waveform, plot_eod_snippets
 from .eodanalysis import add_eod_analysis_config, eod_waveform_args
 from .eodanalysis import analyze_wave_args, analyze_pulse_args
 from .eodanalysis import add_species_config

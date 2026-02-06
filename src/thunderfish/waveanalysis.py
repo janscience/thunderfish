@@ -26,8 +26,10 @@ Analysis of wave-type EOD waveforms.
 """
 
 import numpy as np
+
 try:
-    import matplotlib.pyplot as plt
+    from matplotlib.ticker import MultipleLocator
+    from matplotlib.artist import setp
 except ImportError:
     pass
 
@@ -533,11 +535,11 @@ def plot_wave_spectrum(axa, axp, spec, props, unit=None,
     # amplitudes:
     markers, stemlines, _ = axa.stem(spec[:n, 0] + 1, spec[:n, 2],
                                      basefmt='none')
-    plt.setp(markers, clip_on=False, **ampl_style)
-    plt.setp(stemlines, **ampl_stem_style)
+    setp(markers, clip_on=False, **ampl_style)
+    setp(stemlines, **ampl_stem_style)
     axa.set_xlim(0.5, n + 0.5)
     axa.set_ylim(bottom=0)
-    axa.xaxis.set_major_locator(plt.MultipleLocator(1))
+    axa.xaxis.set_major_locator(MultipleLocator(1))
     axa.tick_params('x', direction='out')
     if unit:
         axa.set_ylabel(f'Amplitude [{unit}]')
@@ -548,10 +550,10 @@ def plot_wave_spectrum(axa, axp, spec, props, unit=None,
     phases[phases<0.0] = phases[phases<0.0] + 2*np.pi
     markers, stemlines, _ = axp.stem(spec[:n, 0] + 1, phases[:n],
                                      basefmt='none')
-    plt.setp(markers, clip_on=False, **phase_style)
-    plt.setp(stemlines, **phase_stem_style)
+    setp(markers, clip_on=False, **phase_style)
+    setp(stemlines, **phase_stem_style)
     axp.set_xlim(0.5, n + 0.5)
-    axp.xaxis.set_major_locator(plt.MultipleLocator(1))
+    axp.xaxis.set_major_locator(MultipleLocator(1))
     axp.tick_params('x', direction='out')
     axp.set_ylim(0, 2*np.pi)
     axp.set_yticks([0, np.pi, 2*np.pi])
@@ -866,6 +868,7 @@ def load_wave_spectrum(file_path):
 
 
 def main():
+    import matplotlib.pyplot as plt
     from thunderlab.eventdetection import snippets
     from .fakefish import wavefish_eods, export_wavefish
     from .eodanalysis import plot_eod_waveform
@@ -893,10 +896,10 @@ def main():
     export_wavefish(power, '', 'Eigenmannia spec')
 
     # plot:
-    fig, axs = plt.subplots(1, 3)
-    plot_eod_waveform(axs[0], mean_eod, props, unit=unit)
-    axs[0].set_title(f'wave fish: EODf = {props["EODf"]:.1f} Hz')
-    plot_wave_spectrum(axs[1], axs[2], power, props)
+    fig, axs = plt.subplot_mosaic('wa\nwp', layout='constrained')
+    plot_eod_waveform(axs['w'], mean_eod, props, unit=unit)
+    axs['w'].set_title(f'wave fish: EODf = {props["EODf"]:.1f} Hz')
+    plot_wave_spectrum(axs['a'], axs['p'], power, props)
     plt.show()
 
 
