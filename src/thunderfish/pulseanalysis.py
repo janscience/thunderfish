@@ -10,7 +10,8 @@ Analysis of pulse-type EOD waveforms.
 - `analyze_pulse_phases()`: characterize all phases of a pulse-type EOD.
 - `decompose_pulse()`: decompose single pulse waveform into sum of Gaussians.
 - `analyze_pulse_tail()`: fit exponential to last peak/trough of pulse EOD.
-- `pulse_spectrum()`: compute the spectrum of a single pulse-type EOD.
+- `pulse_spectrum()`: spectrum of a single pulse-type EOD.
+- `pulsetrain_spectrum()`: power spectrum of train of pulse-type EODs.
 - `analyze_pulse_spectrum()`: analyze the spectrum of a pulse-type EOD.
 - `analyze_pulse_intervals()`: basic statistics of interpulse intervals.
 
@@ -52,7 +53,7 @@ import numpy as np
 from pathlib import Path
 from scipy.optimize import curve_fit, minimize
 from thunderlab.eventdetection import detect_peaks, peak_width
-from thunderlab.powerspectrum import next_power_of_two, nfft, decibel
+from thunderlab.powerspectrum import next_power_of_two, nfft, psd, decibel
 from thunderlab.tabledata import TableData
 
 from .fakefish import pulsefish_waveform, pulsefish_spectrum
@@ -795,7 +796,7 @@ def analyze_pulse_tail(peak_index, eod, ratetime=None,
 
     
 def pulse_spectrum(eod, ratetime=None, freq_resolution=1.0, fade_frac=0.0):
-    """Compute the spectrum of a single pulse-type EOD.
+    """Spectrum of a single pulse-type EOD.
     
     Parameters
     ----------
@@ -832,6 +833,7 @@ def pulse_spectrum(eod, ratetime=None, freq_resolution=1.0, fade_frac=0.0):
     See Also
     --------
     thunderfish.fakefish.pulsefish_spectrum(): analytically computed spectra for simulated pulse EODs.
+    pulsetrain_spectrum(): power spectrum of train of pulse-type EODs.
 
     """
     if eod.ndim == 2:
@@ -865,6 +867,78 @@ def pulse_spectrum(eod, ratetime=None, freq_resolution=1.0, fade_frac=0.0):
     fourier = np.fft.rfft(data)*dt
     energy = 2*np.abs(fourier)**2     # one-sided spectrum!
     return freqs, energy
+
+
+def pulsetrain_spectrum(eod_times, eod, ratetime=None,
+                        freq_resolution=1.0, fade_frac=0.0):
+    """Power spectrum of train of pulse-type EODs.
+
+    Places mean eod waveform at `eod_times` and computes from that the
+    power spectrum.
+    
+    Parameters
+    ----------
+    eod_times: 1-D array or None
+        List of times of detected EODs.
+    eod: 1-D or 2-D array
+        The eod waveform of which the spectrum is computed.
+        If an 1-D array, then this is the waveform and you
+        need to also pass a sampling rate in `rate`.
+        If a 2-D array, then first column is time in seconds and second
+        column is the eod waveform. Further columns are ignored.
+    ratetime: None or float or array of float
+        If a 1-D array is passed on to `eod` then either the sampling
+        rate in Hertz or the time array corresponding to `eod`.
+    freq_resolution: float
+        The frequency resolution of the spectrum.
+    fade_frac: float
+        Fraction of time of the EOD waveform that is used to fade in
+        and out to zero baseline.
+    
+    Returns
+    -------
+    freq: 1-D array of float
+        Frequencies corresponding to power array.
+    power: 1-D array of float
+        Power spectral density in [eod]^2/Hz.
+
+    """
+    if eod.ndim == 2:
+        rate = 1.0/(eod[1, 0] - eod[0, 0])
+        time = eod[:, 0]
+        eod = eod[:, 1]
+    elif isinstance(ratetime, (list, tuple, np.ndarray)):
+        time = ratetime
+        rate = 1.0/(time[1] - time[0])
+    else:
+        time = np.arange(len(eod))/ratetime
+
+    ipi = np.median(np.diff(eod_times))
+    n_ipi = int(ipi*rate)
+    n = int(eod_times[-1]*rate) + n_ipi//2
+    data = np.zeros(n)
+    i0 = np.argmin(np.abs(time))
+    i1 = len(eod) - i0
+    fn = int(fade_frac*len(eod))
+    # place eod waveforms at eod_times:
+    prev_idx = -n_ipi
+    for t in eod_times:
+        idx = int(np.round(t*rate))
+        ii0 = i0 if idx - i0 >= 0 else idx
+        if idx - ii0 < prev_idx + n_ipi//2:
+            ii0 = idx - prev_idx - n_ipi//2
+            if ii0 < 0:
+                ii0 = 0
+        ii1 = i1 if idx + i1 < len(data) else len(data) - 1 - idx
+        data[idx - ii0:idx + ii1] = eod[i0 - ii0:i0 + ii1]
+        # fade in and out:
+        if fn > 0:
+            data[idx - ii0:idx - ii0 + fn] *= np.arange(fn)/fn
+            data[idx + ii1 - fn:idx + ii1] *= np.arange(fn)[::-1]/fn
+        prev_idx = idx
+    freq, power = psd(data - np.mean(data), rate, freq_resolution)
+    #power *= n/rate/ipi/len(eod_times)
+    return freq, power
 
 
 def analyze_pulse_spectrum(freqs, energy):
@@ -1355,7 +1429,7 @@ def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
 
 
 def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
-                        min_db = -60,
+                        min_db = -60, ref_energy=None,
                         spec_style=dict(lw=3, color='tab:blue'),
                         analytic_style=dict(lw=4, color='tab:cyan'),
                         peak_style=dict(ls='', marker='o', markersize=6,
@@ -1383,6 +1457,9 @@ def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
         Maximun frequency of the spectrum to be plotted (logscale!).
     min_db: float
         Minimum decibel level shown.
+    ref_energy: float or None
+        Reference energy for computing decibel.
+        If None take the maximum energy.
     spec_style: dict
         Arguments passed on to the plot command for the energy spectrum
         computed from the data.
@@ -1402,6 +1479,11 @@ def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
         Color for the rectangular patch marking the first 50 Hz.
     fontsize: str or float or int
         Fontsize for annotation text.
+
+    Returns
+    -------
+    ref_energy: float
+        The actually used reference energy for computing decibels.
     """
     ax.axvspan(1, 50, color=att50_color, zorder=-20)
     att = props['energyatt50']
@@ -1458,6 +1540,7 @@ def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
     ax.set_ylim(min_db, 2)
     ax.set_xlabel('Frequency [Hz]')
     ax.set_ylabel('Energy [dB]')
+    return ref_energy
 
 
 def save_pulse_fish(eod_props, unit, basename, **kwargs):
@@ -1980,7 +2063,8 @@ def main():
 
     # data:
     rate = 96_000
-    data = pulsefish_eods('Triphasic', 83.0, rate, 5.0, noise_std=0.02)
+    data = pulsefish_eods('Triphasic', 83.0, rate, 5.0,
+                          jitter_cv=0.01, noise_std=0.01)
     unit = 'mV'
     eod_idx, _ = detect_peaks(data, 1.0)
     eod_times = eod_idx/rate
@@ -1996,11 +2080,19 @@ def main():
     # write out as python code:
     export_pulsefish(pulses, '', 'Triphasic spec')
 
+    # full spectrum:
+    freq, power = pulsetrain_spectrum(eod_times, mean_eod, None,
+                                      freq_resolution=5, fade_frac=0.05)
+    dfreq, dpower = psd(data, rate, freq_resolution=5)
+
     # plot:
     fig, axs = plt.subplots(1, 2, layout='constrained')
     plot_eod_waveform(axs[0], mean_eod, props, peaks, unit=unit)
     axs[0].set_title(f'pulse fish: EODf = {props["EODf"]:.1f} Hz')
-    plot_pulse_spectrum(axs[1], energy, props)
+    ref = plot_pulse_spectrum(axs[1], energy, props)
+    fac = 1500 # conversion power to energy spectrum 
+    axs[1].plot(freq, decibel(power, ref*fac), 'k')
+    axs[1].plot(dfreq, decibel(dpower, ref*fac), 'gray')
     plt.show()
 
 
