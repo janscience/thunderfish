@@ -171,6 +171,7 @@ class ThunderfishDialog(QDialog):
         else:
             self.tabs.setCurrentIndex(trace_idx)
 
+        self.eod_tabs = None
         if len(self.eod_props) > 0:
             # tabs of EODs:
             self.eod_tabs = QTabWidget(self)
@@ -225,9 +226,12 @@ class ThunderfishDialog(QDialog):
         vbox.addLayout(hbox)
 
     def resizeEvent(self, event):
-        h = (event.size().height() - self.tools.height())//2 - 10
-        self.tabs.setMaximumHeight(h)
-        self.eod_tabs.setMaximumHeight(h)
+        if self.eod_tabs is None:
+            super().resizeEvent(event)
+        else:
+            h = (event.size().height() - self.tools.height())//2 - 10
+            self.tabs.setMaximumHeight(h)
+            self.eod_tabs.setMaximumHeight(h)
 
     def toggle_maximize(self):
         if self.isMaximized():
