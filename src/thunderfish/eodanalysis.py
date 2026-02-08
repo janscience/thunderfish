@@ -1813,7 +1813,8 @@ def add_eod_analysis_config(cfg, win_fac=2.0, min_win=0.01, max_eods=None,
                             flip_wave='none', flip_pulse='none',
                             n_harm=10, min_pulse_win=0.001,
                             start_end_thresh_fac=0.01, peak_thresh_fac=0.002,
-                            min_dist=50.0e-6, width_frac = 0.5, fit_frac = 0.5,
+                            min_dist=50.0e-6, width_frac = 0.5,
+                            fit_frac = 0.5, fit_gaussians=True,
                             freq_resolution=1.0, fade_frac=0.0,
                             ipi_cv_thresh=0.5, ipi_percentile=30.0):
     """Add all parameters needed for the eod analysis functions as a new
@@ -1842,6 +1843,7 @@ def add_eod_analysis_config(cfg, win_fac=2.0, min_win=0.01, max_eods=None,
     cfg.add('eodMinimumDistance', min_dist, 's', 'Minimum distance between peaks and troughs in a EOD pulse.')
     cfg.add('eodPulseWidthFraction', 100*width_frac, '%', 'The width of a pulse is measured at this fraction of the pulse height.')
     cfg.add('eodExponentialFitFraction', 100*fit_frac, '%', 'An exponential function is fitted on the tail of a pulse starting at this fraction of the height of the last peak.')
+    cfg.add('eodFitGaussians', fit_gaussians, '', 'Fit sum of Gaussians to pulse-type EOD waveform.')
     cfg.add('eodPulseFrequencyResolution', freq_resolution, 'Hz', 'Frequency resolution of single pulse spectrum.')
     cfg.add('eodPulseFadeFraction', 100*fade_frac, '%', 'Fraction of time of the EOD waveform snippet that is used to fade in and out to zero baseline.')
     cfg.add('ipiCVThresh', ipi_cv_thresh, '', 'If coefficient of variation of interpulse intervals is smaller than this threshold, then use all intervals for computing EOD frequency.')
@@ -1922,6 +1924,7 @@ def analyze_pulse_args(cfg):
                  'width_frac': 'eodPulseWidthFraction',
                  'fit_frac': 'eodExponentialFitFraction',
                  'flip_pulse': 'flipPulseEOD',
+                 'fit_gaussians': 'eodFitGaussians',
                  'freq_resolution': 'eodPulseFrequencyResolution',
                  'fade_frac': 'eodPulseFadeFraction',
                  'ipi_cv_thresh': 'ipiCVThresh',

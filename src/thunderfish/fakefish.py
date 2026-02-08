@@ -343,6 +343,8 @@ def export_wavefish(fish, name='Unknown_harmonics', species='', file=None):
     fish: dict
         Dictionary with amplitudes, phases, and species.
     """
+    if fish is None or (isinstance(fish, dict) and len(fish) == 0):
+        return {}
     # get relative amplitude and phases:
     amplitudes, phases = wavefish_spectrum(fish)
     harmonics = dict(amplitudes=amplitudes,
@@ -837,6 +839,8 @@ def export_pulsefish(fish, name='Unknown_phases', species='', file=None):
         Dictionary with phase times, amplitudes, standard deviations and
         species.
     """
+    if fish is None or (isinstance(fish, dict) and len(fish) == 0):
+        return {}
     # get phase properties:
     phase_times, phase_amplitudes, phase_stdevs = pulsefish_phases(fish)
     phases = dict(times=phase_times,

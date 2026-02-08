@@ -1037,7 +1037,7 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
                   start_end_thresh_fac=0.01, peak_thresh_fac=0.002,
                   min_dist=50.0e-6, width_frac=0.5, fit_frac=0.5,
                   freq_resolution=1.0, fade_frac=0.0,
-                  flip_pulse='none', ipi_cv_thresh=0.5,
+                  flip_pulse='none', fit_gaussians=True, ipi_cv_thresh=0.5,
                   ipi_percentile=30.0, verbose=0):
     """Analyze the EOD waveform of a pulse fish.
     
@@ -1082,6 +1082,9 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
         - 'auto' flip waveform such that the first large extremum is positive.
         - 'flip' flip waveform.
         - 'none' do not flip waveform.
+    fit_gaussians: bool
+        If True, fit sum of Gaussians to pulse waveform.
+        Otherwise, do not fit, and return empty dictionary for `pulses`.
     ipi_cv_thresh: float
         If the coefficient of variation of the interpulse intervals
         (IPIs) is smaller than this threshold, then the statistics of
@@ -1186,7 +1189,7 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
     
         of Gaussians fitted to the pulse waveform.  Use the functions
         provided in thunderfish.fakefish to simulate pulse fish EODs
-        from this data.
+        from this data. Empty dictionary if `fit_gaussians` is False.
     energy: 2-D array
         The energy spectrum of a single pulse. First column are the
         frequencies, second column the energy in x^2 s/Hz.
@@ -1269,15 +1272,17 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
 
     # decompose EOD waveform:
     rmserror = np.inf
-    pulse = decompose_pulse(meod, freqs, energy, phases,
-                            width_frac, verbose=verbose)
-    if len(pulse) > 0:
-        eod_fit = pulsefish_waveform(pulse, meod[:, 0])
-        meod[:, -2] = eod_fit
-        rmserror = np.sqrt(np.mean((meod[:, 1] - meod[:, -2])**2))/pp_ampl
-        spec = pulsefish_spectrum(pulse, freqs)
-        spec = np.abs(spec)**2
-        eenergy = np.hstack((eenergy, spec.reshape((-1, 1))))
+    pulse = {}
+    if fit_gaussians:
+        pulse = decompose_pulse(meod, freqs, energy, phases,
+                                width_frac, verbose=verbose)
+        if len(pulse) > 0:
+            eod_fit = pulsefish_waveform(pulse, meod[:, 0])
+            meod[:, -2] = eod_fit
+            rmserror = np.sqrt(np.mean((meod[:, 1] - meod[:, -2])**2))/pp_ampl
+            spec = pulsefish_spectrum(pulse, freqs)
+            spec = np.abs(spec)**2
+            eenergy = np.hstack((eenergy, spec.reshape((-1, 1))))
 
     # analyze pulse intervals:
     ipi_median, ipi_mean, ipi_std = \
@@ -1517,7 +1522,8 @@ def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
     ax.plot([highcutoff, highcutoff], [min_db, -3], zorder=30, **cutoff_style)
     ax.text(1.2*highcutoff, -3, f'{highcutoff:.0f}Hz',
             ha='left', va='center', zorder=100, fontsize=fontsize)
-    ref_energy = np.max(energy[:, 1])
+    if ref_energy is None:
+        ref_energy = np.max(energy[:, 1])
     if energy.shape[1] > 2 and np.all(np.isfinite(energy[:, 2])) and len(analytic_style) > 0:
         db = decibel(energy[:, 2], ref_energy)
         ax.plot(energy[:, 0], db, zorder=45, **analytic_style)
@@ -2061,36 +2067,42 @@ def main():
 
     print('Analysis of pulse-type EOD waveforms.')
 
+    deltaf = 2  # frequency resolution
+    eodf = 80   # EOD frequency
+
     # data:
-    rate = 96_000
-    data = pulsefish_eods('Triphasic', 83.0, rate, 5.0,
+    rate = 100_000
+    data = pulsefish_eods('Triphasic', eodf, rate, 5.0,
                           jitter_cv=0.01, noise_std=0.01)
     unit = 'mV'
     eod_idx, _ = detect_peaks(data, 1.0)
     eod_times = eod_idx/rate
 
     # mean EOD:
-    snips = snippets(data, eod_idx, start=-300, stop=300)
+    ns = int(0.003*rate)
+    snips = snippets(data, eod_idx, start=-ns, stop=ns)
     mean_eod = np.mean(snips, 0)
 
     # analyse EOD:
     mean_eod, props, peaks, pulses, energy = \
-        analyze_pulse(mean_eod, rate, eod_times)
+        analyze_pulse(mean_eod, rate, eod_times,
+                      freq_resolution=deltaf, fit_gaussians=False)
 
     # write out as python code:
     export_pulsefish(pulses, '', 'Triphasic spec')
 
     # full spectrum:
     freq, power = pulsetrain_spectrum(eod_times, mean_eod, None,
-                                      freq_resolution=5, fade_frac=0.05)
-    dfreq, dpower = psd(data, rate, freq_resolution=5)
+                                      freq_resolution=deltaf, fade_frac=0.05)
+    dfreq, dpower = psd(data, rate, freq_resolution=deltaf)
 
     # plot:
     fig, axs = plt.subplots(1, 2, layout='constrained')
     plot_eod_waveform(axs[0], mean_eod, props, peaks, unit=unit)
     axs[0].set_title(f'pulse fish: EODf = {props["EODf"]:.1f} Hz')
     ref = plot_pulse_spectrum(axs[1], energy, props)
-    fac = 1500 # conversion power to energy spectrum 
+    fac = 6300/deltaf # conversion power to energy spectrum (independent of recording duration and sampling rate, dependent on EOD frequency)
+    print(f'FFT window={1/freq[1]:.2f}s, number of pulses={len(eod_times)}')
     axs[1].plot(freq, decibel(power, ref*fac), 'k')
     axs[1].plot(dfreq, decibel(dpower, ref*fac), 'gray')
     plt.show()
