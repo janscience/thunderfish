@@ -34,10 +34,10 @@ from .thunderfish import rec_style, spectrum_style, eod_styles, snippet_style
 from .thunderfish import wave_spec_styles, pulse_spec_styles
 from .bestwindow import clip_args, clip_amplitudes
 from .harmonics import colors_markers, plot_harmonic_groups
-from .eodanalysis import plot_eod_recording, plot_pulse_eods
 from .eodanalysis import plot_eod_waveform, plot_eod_snippets
-from .eodanalysis import plot_wave_spectrum, plot_pulse_spectrum
-from .eodanalysis import save_analysis
+from .eodanalysis import plot_eod_recording, save_analysis
+from .pulseanalysis import plot_pulse_eods, plot_pulse_spectrum
+from .waveanalysis import plot_wave_spectrum
 
 
 class ThunderfishDialog(QDialog):
