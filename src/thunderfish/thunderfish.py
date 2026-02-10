@@ -260,11 +260,9 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
         for i, psd in enumerate(psd_data):
             wave_eodfs = harmonic_groups(psd[:,0], psd[:,1], verbose-1, **h_kwargs)[0]
             if verbose > 0 and len(psd_data) > 1:
-                numpsdresolutions = cfg.value('numberPSDResolutions')
-                print('fundamental frequencies detected in power spectrum of window %d at resolution %d:'
-                      % (i//numpsdresolutions, i%numpsdresolutions))
+                print(f'fundamental frequencies detected in spectrum of window {i}:')
                 if len(wave_eodfs) > 0:
-                    print('  ' + ' '.join(['%.1f' % freq[0, 0] for freq in wave_eodfs]))
+                    print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
                 else:
                     print('  none')
             wave_eodfs_list.append(wave_eodfs)
