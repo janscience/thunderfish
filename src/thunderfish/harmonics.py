@@ -1395,6 +1395,13 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         Maximum number of rows to be used for the legend.
     kwargs: 
         Key word arguments for the legend of the plot.
+
+    Returns
+    -------
+    groups_dict: dict
+        Dictionary that maps artist handles marking the harmonic groups
+        with tuples containing the index and the 2D arrays from the
+        `group_list`.
     """
     if len(group_list) == 0:
         return
@@ -1415,13 +1422,16 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
             idx = idx[np.argsort(freqs)]
 
     # plot:
+    groups_dict = {}
+    artists = []
+    labels = []
     k = 0
     for i in idx:
         if indices is not None and skip_bad and indices[i] < 0:
             continue
         group = group_list[i]
-        x = group[:,0]
-        y = decibel(group[:,1])
+        x = group[:, 0]
+        y = decibel(group[:, 1])
         msize = 7.0 + 10.0*(powers[i]/max_power)**0.25
         color_kwargs = {}
         if colors is not None:
@@ -1434,26 +1444,37 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
                 label = '(' + label + ')'
             else:
                 label = ' ' + label + ' '
-        if legend_rows > 5 and k >= legend_rows:
-            label = None
         if markers is None:
-            ax.plot(x, y, 'o', ms=msize, label=label, **color_kwargs)
+            aa = ax.plot(x, y, 'o', ms=msize, **color_kwargs)
         else:
             if k >= len(markers):
                 break
-            ax.plot(x, y, linestyle='None', marker=markers[k],
-                    mec=None, mew=0.0, ms=msize, label=label, **color_kwargs)
+            aa = ax.plot(x, y, linestyle='None', marker=markers[k],
+                         mec=None, mew=0.0, ms=msize, **color_kwargs)
+        labels.append(label)
+        artists.append(aa[0])
+        for a in aa:
+            a.set_picker(8)
+            groups_dict[a] = [i, group]
         k += 1
 
     # legend:
-    if legend_rows > 0:
-        if legend_rows > 5:
-            ncol = 1
-        else:
-            ncol = (len(idx)-1) // legend_rows + 1
-        ax.legend(numpoints=1, ncol=ncol, **kwargs)
-    else:
-        ax.legend(numpoints=1, **kwargs)
+    ncol = (len(idx) - 1) // legend_rows + 1 if legend_rows > 0 else 1
+    if ncol < 1:
+        ncol = 1
+    try:
+        handles = ax.legend(artists, labels, numpoints=1, ncols=ncol,
+                            **kwargs)
+    except TypeError:
+        handles = ax.legend(artists, labels, numpoints=1, ncol=ncol,
+                                 **kwargs)
+    lines = handles.get_lines()
+    for k in range(min(len(lines), len(idx))):
+        a = lines[k]
+        a.set_picker(8)
+        i = idx[k]
+        groups_dict[a] = [i, group_list[i]]
+    return groups_dict
 
 
 def plot_psd_harmonic_groups(ax, psd_freqs, psd, group_list,

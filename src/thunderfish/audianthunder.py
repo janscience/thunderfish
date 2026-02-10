@@ -144,6 +144,7 @@ class ThunderfishDialog(QDialog):
 
         # tab with power spectrum:
         canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
+        canvas.mpl_connect('pick_event', self.onpick_spectrum)
         navi = NavigationToolbar(canvas, self)
         navi.hide()
         self.navis.append(navi)
@@ -152,13 +153,16 @@ class ThunderfishDialog(QDialog):
         if self.power_thresh is not None:
             ax.plot(self.power_thresh[:, 0], decibel(self.power_thresh[:, 1]),
                     '#CCCCCC', lw=1)
+        self.wave_dict = {}
         if len(self.wave_eodfs) > 0:
-            plot_harmonic_groups(ax, self.wave_eodfs, self.wave_indices,
-                                 max_groups=0, skip_bad=False,
-                                 sort_by_freq=True, label_power=False,
-                                 colors=self.wave_colors,
-                                 markers=self.wave_markers,
-                                 frameon=False, loc='upper right')
+            self.wave_dict = \
+                plot_harmonic_groups(ax, self.wave_eodfs, self.wave_indices,
+                                     max_groups=0, skip_bad=False,
+                                     sort_by_freq=True, label_power=False,
+                                     colors=self.wave_colors,
+                                     markers=self.wave_markers,
+                                     legend_rows=10, frameon=False,
+                                     bbox_to_anchor=(1, 1), loc='upper left')
         plot_decibel_psd(ax, self.power_freqs, self.powers,
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
@@ -229,6 +233,13 @@ class ThunderfishDialog(QDialog):
             h = (event.size().height() - self.tools.height())//2 - 10
             self.tabs.setMaximumHeight(h)
             self.eod_tabs.setMaximumHeight(h)
+            
+    def onpick_spectrum(self, event):
+        a = event.artist
+        if a in self.wave_dict:
+            finx, fish = self.wave_dict[a]
+        # TODO: from fishfinder.py
+        #self.annotate_fish(fish, finx)
 
     def toggle_maximize(self):
         if self.isMaximized():
