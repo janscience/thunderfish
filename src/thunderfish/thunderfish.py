@@ -38,7 +38,7 @@ from audioio.audioconverter import parse_load_kwargs
 from audioio import get_str, play, fade, load_audio
 from thunderlab.configfile import ConfigFile
 from thunderlab.dataloader import DataLoader
-from thunderlab.powerspectrum import decibel, plot_decibel_psd, multi_psd
+from thunderlab.powerspectrum import decibel, plot_decibel_psd, spectrogram
 from thunderlab.powerspectrum import add_spectrum_config, spectrum_args
 from thunderlab.tabledata import TableData, add_write_table_config, write_table_args
 
@@ -212,9 +212,10 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
 
     Returns
     -------
-    psd_data: list of 2D arrays
-        List of power spectra (frequencies and power) of the analysed data
-        for different frequency resolutions.
+    power_freqs: 1D array of float
+        Frequencies for `powers`. Can be empty.
+    powers: 1D array of float
+        Power spectrum of the data.
     wave_eodfs: list of 2D arrays
         Frequency and power of fundamental frequency/harmonics of all wave fish.
     wave_indices: array of int
@@ -246,20 +247,23 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
     """
     dfreq = np.nan
     nfft = 0
-    psd_data = [[]]
+    power_freqs = np.zeros(0)
+    powers = np.zeros(0)
     wave_eodfs = []
     wave_indices = []
     if 'w' in mode:
         # detect wave fish:
-        psd_data = multi_psd(data, rate, **spectrum_args(cfg))
-        dfreq = np.mean(np.diff(psd_data[0][:,0]))
+        power_freqs, power_times, powers = spectrogram(data, rate,
+                                                       **spectrum_args(cfg))
+        dfreq = np.mean(np.diff(power_freqs))
         nfft = int(rate/dfreq)
         h_kwargs = psd_peak_detection_args(cfg)
         h_kwargs.update(harmonic_groups_args(cfg))
         wave_eodfs_list = []
-        for i, psd in enumerate(psd_data):
-            wave_eodfs = harmonic_groups(psd[:,0], psd[:,1], verbose-1, **h_kwargs)[0]
-            if verbose > 0 and len(psd_data) > 1:
+        for i, psd in enumerate(powers.T):
+            wave_eodfs = harmonic_groups(power_freqs, psd, verbose-1,
+                                         **h_kwargs)[0]
+            if verbose > 0 and len(power_times) > 1:
                 print(f'fundamental frequencies detected in spectrum of window {i}:')
                 if len(wave_eodfs) > 0:
                     print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
@@ -268,6 +272,7 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
             wave_eodfs_list.append(wave_eodfs)
         wave_eodfs = consistent_fishes(wave_eodfs_list,
                                        df_th=cfg.value('frequencyThreshold'))
+        powers = np.mean(powers, 1)
         if verbose > 0:
             if len(wave_eodfs) > 0:
                 print('found %2d EOD frequencies consistent in all power spectra:' % len(wave_eodfs))
@@ -355,15 +360,17 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
                     ii0 = i0 if idx-i0 >= 0 else idx
                     ii1 = i1 if idx+i1 < len(pulse_data) else len(pulse_data)-1-idx
                     pulse_data[idx-ii0:idx+ii1] = mean_eod[i0-ii0:i0+ii1,1]
-                pulse_psd = multi_psd(pulse_data, rate, **spectrum_args(cfg))
-                pulse_power = pulse_psd[0][:,1]
+                pulse_freqs, _, pulse_power = spectrogram(pulse_data, rate,
+                                                          **spectrum_args(cfg))
+                pulse_power = np.mean(pulse_power, 1)
                 pulse_power *= len(data)/rate/props['period']/len(props['peaktimes'])
-                pulse_power *= 5.0
+                pulse_power *= 5
                 if power_thresh is None:
-                    power_thresh = pulse_psd[0]
-                    power_thresh[:,1] = pulse_power
+                    power_thresh = np.zeros((len(pulse_freqs), 2))
+                    power_thresh[:, 0] = pulse_freqs
+                    power_thresh[:, 1] = pulse_power
                 else:
-                    power_thresh[:,1] += pulse_power
+                    power_thresh[:, 1] += pulse_power
 
         # remove wavefish below pulse fish power:
         if 'w' in mode and power_thresh is not None:
@@ -382,8 +389,8 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
 
     if 'w' in mode:
         # analyse EOD waveform of all wavefish:
-        powers = np.array([np.sum(fish[:,1]) for fish in wave_eodfs])
-        power_indices = np.argsort(-powers)
+        fish_powers = np.array([np.sum(fish[:,1]) for fish in wave_eodfs])
+        power_indices = np.argsort(-fish_powers)
         wave_indices = np.zeros(len(wave_eodfs), dtype=int) - 3
         for k, idx in enumerate(power_indices):
             fish = wave_eodfs[idx]
@@ -417,11 +424,11 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
                 rm_indices = power_indices[k:]
                 if verbose > 0:
                     print('skip %6.1fHz wave  fish: power=%5.1fdB, p-p amplitude=%5.1fdB smaller than pulse fish=%5.1dB - 20dB' %
-                          (props['EODf'], decibel(powers[idx]),
+                          (props['EODf'], decibel(fish_powers[idx]),
                            decibel(props['p-p-amplitude']), decibel(max_pulse_amplitude)))
                     for idx in rm_indices[1:]:
                         print('skip %6.1fHz wave  fish: power=%5.1fdB even smaller' %
-                              (wave_eodfs[idx][0,0], decibel(powers[idx])))
+                              (wave_eodfs[idx][0,0], decibel(fish_powers[idx])))
                 wave_eodfs = [eodfs for idx, eodfs in enumerate(wave_eodfs)
                               if idx not in rm_indices]
                 wave_indices = np.array([idcs for idx, idcs in enumerate(wave_indices)
@@ -446,8 +453,9 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
                           ('remove' if remove else 'skip', props['EODf'], skips, msg))
         wave_eodfs = [eodfs for idx, eodfs in zip(wave_indices, wave_eodfs) if idx > -2]
         wave_indices = np.array([idx for idx in wave_indices if idx > -2], dtype=int)
-    return (psd_data, wave_eodfs, wave_indices, eod_props, mean_eods,
-            spec_data, phase_data, pulseeod_data, power_thresh, skip_reason, zoom_window)
+    return (power_freqs, powers, wave_eodfs, wave_indices, eod_props,
+            mean_eods, spec_data, phase_data, pulseeod_data,
+            power_thresh, skip_reason, zoom_window)
 
 
 def remove_eod_files(output_basename, verbose, cfg):
@@ -487,10 +495,10 @@ def axes_style(ax):
     ax.get_yaxis().tick_left()
 
     
-def plot_eods(title, message_filename,
-              raw_data, rate, channel, idx0, idx1, clipped,
-              psd_data, wave_eodfs, wave_indices, mean_eods, eod_props,
-              phase_data, pulse_data, spec_data, indices, unit, zoom_window,
+def plot_eods(title, message_filename, raw_data, rate, channel, idx0,
+              idx1, clipped, power_freqs, powers, wave_eodfs,
+              wave_indices, mean_eods, eod_props, phase_data,
+              pulse_data, spec_data, indices, unit, zoom_window,
               n_snippets=10, power_thresh=None, label_power=True,
               all_eods=False, spec_plots='auto', skip_bad=True,
               log_freq=False, min_freq=0.0, max_freq=3000.0,
@@ -521,8 +529,10 @@ def plot_eods(title, message_filename,
         Index of the end of the analysis window in the dataset.
     clipped: float
         Fraction of clipped amplitudes.
-    psd_data: 2D array
-        Power spectrum (frequencies and power) of the analysed data.
+    power_freqs: 1D array of float
+        Frequencies for `powers`.
+    powers: 1D array of float
+        Power spectrum of the data.
     wave_eodfs: array
         Frequency and power of fundamental frequency/harmonics of several fish.
     wave_indices: array of int
@@ -682,14 +692,14 @@ def plot_eods(title, message_filename,
     legendwidth = 2.2/width if label_power else 1.7/width
     if neods == 0:
         axr = fig.add_axes([leftx, posy, fullwidth, pheight])                    # top, wide
-        if len(psd_data) > 0:
+        if powers is not None and len(powers) > 0:
             axp = fig.add_axes([leftx, 2.0/height, fullwidth, pheight])              # bottom, wide
     else:
-        if npulse == 0 and nwave > 2 and psd_data is not None and \
-           len(psd_data) > 0 and not force_both:
+        if npulse == 0 and nwave > 2 and powers is not None and \
+           len(powers) > 0 and not force_both:
             axp = fig.add_axes([leftx, posy, fullwidth-legendwidth, pheight])    # top, wide
             legend_inside = False
-        elif (npulse > 0 or psd_data is None or len(psd_data) == 0) \
+        elif (npulse > 0 or powers is None or len(powers) == 0) \
              and len(wave_eodfs) == 0 and not force_both:
             axr = fig.add_axes([leftx, posy, fullwidth, pheight])                # top, wide
         else:
@@ -756,8 +766,8 @@ def plot_eods(title, message_filename,
                                  **kwargs)
             if legend_inside:
                 axp.get_legend().get_frame().set_color('white')
-        if psd_data is not None and len(psd_data) > 0:
-            plot_decibel_psd(axp, psd_data[:,0], psd_data[:,1],
+        if powers is not None and len(powers) > 0:
+            plot_decibel_psd(axp, power_freqs, powers,
                              log_freq=log_freq, min_freq=min_freq,
                              max_freq=max_freq, ymarg=5.0,
                              sstyle=spectrum_style)
@@ -889,12 +899,12 @@ def plot_eods(title, message_filename,
     return fig
 
                             
-def plot_eod_subplots(base_name, multi_pdf, subplots, title, raw_data, rate, idx0, idx1,
-                      clipped, psd_data, wave_eodfs, wave_indices, mean_eods,
-                      eod_props, phase_data, pulse_data, spec_data,
-                      unit, zoom_window,
-                      n_snippets=10, power_thresh=None, label_power=True,
-                      skip_bad=True, log_freq=False,
+def plot_eod_subplots(base_name, multi_pdf, subplots, title, raw_data,
+                      rate, idx0, idx1, clipped, power_freqs, powers,
+                      wave_eodfs, wave_indices, mean_eods, eod_props,
+                      phase_data, pulse_data, spec_data, unit,
+                      zoom_window, n_snippets=10, power_thresh=None,
+                      label_power=True, skip_bad=True, log_freq=False,
                       min_freq=0.0, max_freq=3000.0, save=True):
     """Plot time traces and spectra into separate windows or files.
 
@@ -923,8 +933,10 @@ def plot_eod_subplots(base_name, multi_pdf, subplots, title, raw_data, rate, idx
         Index of the end of the analysis window in the dataset.
     clipped: float
         Fraction of clipped amplitudes.
-    psd_data: 2D array
-        Power spectrum (frequencies and power) of the analysed data.
+    power_freqs: 1D array of float
+        Frequencies for `powers`.
+    powers: 1D array of float
+        Power spectrum of the data.
     wave_eodfs: array
         Frequency and power of fundamental frequency/harmonics of several fish.
     wave_indices: array of int
@@ -1042,8 +1054,9 @@ def plot_eod_subplots(base_name, multi_pdf, subplots, title, raw_data, rate, idx
                                  sort_by_freq=True, label_power=label_power,
                                  colors=wave_colors, markers=wave_markers,
                                  frameon=False, **kwargs)
-        plot_decibel_psd(ax, psd_data[:,0], psd_data[:,1], log_freq=log_freq,
-                         min_freq=min_freq, max_freq=max_freq, ymarg=5.0,
+        plot_decibel_psd(ax, power_freqs, powers,
+                         log_freq=log_freq, min_freq=min_freq,
+                         max_freq=max_freq, ymarg=5.0,
                          sstyle=spectrum_style)
         ax.yaxis.set_major_locator(ticker.MaxNLocator(6))
         if len(wave_eodfs) == 1:
@@ -1248,7 +1261,8 @@ def thunderfish_plot(files, data_path=None, load_kwargs={},
         clipped = eod_props[0]['winclipped']
     zoom_window = [1.2, 1.3]
     # load recording:
-    psd_data = None
+    power_freqs = None
+    powers = None
     if base_name:
         name = os.path.basename(base_name) if data_path and data_path != '.' else base_name
         data_path = os.path.join(data_path, name)
@@ -1264,14 +1278,15 @@ def thunderfish_plot(files, data_path=None, load_kwargs={},
     if len(eod_props) > 0 and not eod_props[0] is None and \
        'dfreq' in eod_props[0] and np.isfinite(eod_props[0]['dfreq']) and \
        data is not None and len(data) > 0:
-        psd_data = multi_psd(data[idx0:idx1], rate,
-                             1.1*eod_props[0]['dfreq'])[0]
-    if psd_data is not None and len(psd_data) > 0:
+        power_freqs, _, powers = spectrogram(data[idx0:idx1], rate,
+                                             1.1*eod_props[0]['dfreq'])
+        powers = np.mean(powers, 1)
+    if powers is not None and len(powers) > 0:
         for idx, fish in zip(wave_indices, wave_eodfs):
             if idx < 0:
                 for k in range(len(fish)):
-                    fish[k,1] = psd_data[np.argmin(np.abs(psd_data[:,0] - fish[k,0])),1]
-    if psd_data is None:
+                    fish[k, 1] = power[np.argmin(np.abs(power_freqs - fish[k, 0]))]
+    if powers is None or len(powers) == 0:
         save_subplots = save_subplots.replace('p', '')
         save_subplots = save_subplots.replace('d', '')
     # file name for output files:
@@ -1290,7 +1305,8 @@ def thunderfish_plot(files, data_path=None, load_kwargs={},
     title = title_str.format(**info_dict)
     if len(save_subplots) == 0 or 'd' in save_subplots:
         fig = plot_eods(title, None, data, rate,
-                        channel, idx0, idx1, clipped, psd_data,
+                        channel, idx0, idx1, clipped,
+                        power_freqs, powers,
                         wave_eodfs, wave_indices, mean_eods,
                         eod_props, phase_data, pulse_data, spec_data,
                         None, unit,
@@ -1309,13 +1325,13 @@ def thunderfish_plot(files, data_path=None, load_kwargs={},
         plt.close()
         save_subplots = save_subplots.replace('d', '')
     if len(save_subplots) > 0:
-        plot_eod_subplots(output_basename, multi_pdf, save_subplots, title,
-                          data, rate, idx0, idx1, clipped, psd_data, wave_eodfs,
+        plot_eod_subplots(output_basename, multi_pdf, save_subplots,
+                          title, data, rate, idx0, idx1, clipped,
+                          power_freqs, powers, wave_eodfs,
                           wave_indices, mean_eods, eod_props,
-                          phase_data, pulse_data, spec_data,
-                          unit, zoom_window, 10,
-                          None, True, skip_bad, log_freq, min_freq,
-                          max_freq, save_plot)
+                          phase_data, pulse_data, spec_data, unit,
+                          zoom_window, 10, None, True, skip_bad,
+                          log_freq, min_freq, max_freq, save_plot)
     return None
 
                 
@@ -1454,7 +1470,7 @@ def thunderfish(filename, load_kwargs, cfg, channel=0,
             return f'{filename}: not enough data for requested window length. You may want to adjust the windowSize parameter in the configuration file.'
 
         # detect EODs in the data:
-        psd_data, wave_eodfs, wave_indices, eod_props, \
+        power_freqs, powers, wave_eodfs, wave_indices, eod_props, \
         mean_eods, spec_data, phase_data, pulse_data, power_thresh, skip_reason, zoom_window = \
           detect_eods(data, rate, min_clip, max_clip, filename, mode,
                       verbose, plot_level, cfg)
@@ -1519,8 +1535,8 @@ def thunderfish(filename, load_kwargs, cfg, channel=0,
                 chl = chan if channels > 1 else None
                 fig = plot_eods(title, messagefilename,
                                 raw_data, rate, chl, idx0, idx1,
-                                clipped, psd_data[0], wave_eodfs,
-                                wave_indices, mean_eods, eod_props,
+                                clipped, power_freqs, powers,
+                                wave_eodfs, wave_indices, mean_eods, eod_props,
                                 phase_data, pulse_data, spec_data, None, unit,
                                 zoom_window, n_snippets, power_thresh,
                                 True, all_eods, spec_plots, skip_bad,
@@ -1540,7 +1556,7 @@ def thunderfish(filename, load_kwargs, cfg, channel=0,
             if len(save_subplots) > 0:
                 plot_eod_subplots(output_basename, multi_pdf, save_subplots,
                                   title, raw_data, rate, idx0, idx1, clipped,
-                                  psd_data[0], wave_eodfs,
+                                  power_freqs, powers, wave_eodfs,
                                   wave_indices, mean_eods, eod_props,
                                   phase_data, pulse_data, spec_data, unit,
                                   zoom_window, n_snippets,

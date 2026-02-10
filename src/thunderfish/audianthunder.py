@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QHBoxLayout
 from PyQt5.QtWidgets import QWidget, QTabWidget, QToolBar, QAction, QStyle
 from PyQt5.QtWidgets import QPushButton, QLabel, QScrollArea, QFileDialog
 
-from thunderlab.powerspectrum import decibel, plot_decibel_psd, multi_psd
+from thunderlab.powerspectrum import decibel, plot_decibel_psd
 from thunderlab.tabledata import write_table_args
 from .thunderfish import configuration, detect_eods
 from .thunderfish import rec_style, spectrum_style, eod_styles, snippet_style
@@ -66,9 +66,10 @@ class ThunderfishDialog(QDialog):
             clip_amplitudes(self.data, max_ampl=self.ampl_max,
                             **clip_args(self.cfg, self.rate))
         # detect EODs in the data:
-        self.psd_data, self.wave_eodfs, self.wave_indices, self.eod_props, \
-        self.mean_eods, self.spec_data, self.phase_data, self.pulse_data, \
-        self.power_thresh, self.skip_reason, self.zoom_window = \
+        self.power_freqs, self.powers, self.wave_eodfs, self.wave_indices, \
+        self.eod_props, self.mean_eods, self.spec_data, self.phase_data, \
+        self.pulse_data, self.power_thresh, \
+        self.skip_reason, self.zoom_window = \
           detect_eods(self.data, self.rate,
                       min_clip=self.min_clip, max_clip=self.max_clip,
                       name=self.file_path, mode='wp',
@@ -158,11 +159,7 @@ class ThunderfishDialog(QDialog):
                                  colors=self.wave_colors,
                                  markers=self.wave_markers,
                                  frameon=False, loc='upper right')
-        deltaf = cfg.value('frequencyResolution')
-        if len(self.eod_props) > 0:
-            deltaf = 1.1*self.eod_props[0]['dfreq']
-        self.psd_data = multi_psd(self.data, self.rate, deltaf)[0]
-        plot_decibel_psd(ax, self.psd_data[:, 0], self.psd_data[:, 1],
+        plot_decibel_psd(ax, self.power_freqs, self.powers,
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
         ax.yaxis.set_major_locator(plt.MaxNLocator(6))
