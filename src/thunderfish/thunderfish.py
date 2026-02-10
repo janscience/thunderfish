@@ -39,7 +39,7 @@ from audioio import get_str, play, fade, load_audio
 from thunderlab.configfile import ConfigFile
 from thunderlab.dataloader import DataLoader
 from thunderlab.powerspectrum import decibel, plot_decibel_psd, multi_psd
-from thunderlab.powerspectrum import add_multi_psd_config, multi_psd_args
+from thunderlab.powerspectrum import add_spectrum_config, spectrum_args
 from thunderlab.tabledata import TableData, add_write_table_config, write_table_args
 
 from .version import __version__, __year__
@@ -138,7 +138,7 @@ def configuration():
         Configuration parameters.
     """
     cfg = ConfigFile()
-    add_multi_psd_config(cfg)
+    add_spectrum_config(cfg)
     cfg.add('frequencyThreshold', 1.0, 'Hz',
             'The fundamental frequency of each fish needs to be detected in each power spectrum within this threshold.')
     # TODO: make this threshold dependent on frequency resolution!
@@ -251,7 +251,7 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
     wave_indices = []
     if 'w' in mode:
         # detect wave fish:
-        psd_data = multi_psd(data, rate, **multi_psd_args(cfg))
+        psd_data = multi_psd(data, rate, **spectrum_args(cfg))
         dfreq = np.mean(np.diff(psd_data[0][:,0]))
         nfft = int(rate/dfreq)
         h_kwargs = psd_peak_detection_args(cfg)
@@ -357,7 +357,7 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
                     ii0 = i0 if idx-i0 >= 0 else idx
                     ii1 = i1 if idx+i1 < len(pulse_data) else len(pulse_data)-1-idx
                     pulse_data[idx-ii0:idx+ii1] = mean_eod[i0-ii0:i0+ii1,1]
-                pulse_psd = multi_psd(pulse_data, rate, **multi_psd_args(cfg))
+                pulse_psd = multi_psd(pulse_data, rate, **spectrum_args(cfg))
                 pulse_power = pulse_psd[0][:,1]
                 pulse_power *= len(data)/rate/props['period']/len(props['peaktimes'])
                 pulse_power *= 5.0
