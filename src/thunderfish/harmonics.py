@@ -40,6 +40,7 @@ Extract and analyze harmonic frequencies from power spectra.
                             harmonics.
 - `plot_psd_harmonic_groups()`: Plot decibel power-spectrum with detected peaks,
                                 harmonic groups, and mains frequencies.
+- `annotate_harmonic_group()`: annotate peaks of a harmonic group in a spectrum.
 
 ## Configuration
 
@@ -1487,6 +1488,8 @@ def plot_psd_harmonic_groups(ax, psd_freqs, psd, group_list,
     
     Parameters
     ----------
+    ax: axis for plot
+        Axis used for plotting.
     psd_freqs: array
         Frequencies of the power spectrum.
     psd: array
@@ -1539,7 +1542,62 @@ def plot_psd_harmonic_groups(ax, psd_freqs, psd, group_list,
     plot_decibel_psd(ax, psd_freqs, psd, log_freq=log_freq, min_freq=min_freq,
                      max_freq=max_freq, ymarg=ymarg, sstyle=sstyle)
 
-    
+
+def annotate_harmonic_group(ax, group, all_peaks=None, freq_thresh=None):
+    """Annotate peaks of a harmonic group in a spectrum.
+
+    Parameters
+    ----------
+    ax: axis for plot
+        Axis used for plotting.
+    group: 2D array of float
+        All harmonics of a harmonic group first column their
+        frequencies and second comun their power. Element [0, 0] is
+        its fundamental frequency.
+    all_freqs: None or 2D array of float
+        All peaks in the power spectrum detected with low threshold.
+    freq_thresh: None or float
+        Threshold for matching peak frequencies. Something like
+        `0.8*delta_f`, where `delta_f` is the frequency resolution
+        of the power spectrum.
+
+    Returns
+    -------
+    artists: list of matplotlib.Artist
+        List of the annotations. Use it to remove the annotations:
+        ```
+        for a in artists:
+            a.remove()
+        artists = []
+        ax.get_figure().canvas.draw()
+        ```
+
+    """
+    # freq_thresh = 0.8*self.deltaf
+    fmin, fmax = ax.get_xlim()
+    fwidth = fmax - fmin
+    artists = []
+    for harmonic, (freq, power) in enumerate(group):
+        count = None
+        if all_peaks is not None and freq_thresh is not None:
+            peak = all_peaks[np.abs(all_peaks[:, 0] - freq) < freq_thresh, :]
+            if len(peak) == 0:
+                continue
+            count = peak[2]
+        pl = []
+        pl.append(f'$f=${freq:.1f}Hz')
+        pl.append(f'$h=${harmonic + 1}')
+        pl.append(f'$p=${power:g}')
+        if count is not None:
+            pl.append(f'$c=${count}')
+        a = ax.annotate('\n'.join(pl), xy=(freq, decibel(power)),
+                        xytext=(freq + 0.03*fwidth, decibel(power)),
+                        bbox=dict(boxstyle='round', facecolor='white'),
+                        arrowprops=dict(arrowstyle='-'))
+        artists.append(a)
+    return artists
+
+        
 def add_psd_peak_detection_config(cfg, low_threshold=0.0, high_threshold=0.0,
                                   thresh_bins=100,
                                   low_thresh_factor=6.0, high_thresh_factor=10.0):

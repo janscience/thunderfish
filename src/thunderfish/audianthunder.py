@@ -38,6 +38,7 @@ from .eodanalysis import plot_eod_waveform, plot_eod_snippets
 from .eodanalysis import plot_eod_recording, save_analysis
 from .pulseanalysis import plot_pulse_eods, plot_pulse_spectrum
 from .waveanalysis import plot_wave_spectrum
+from .harmonics import annotate_harmonic_group
 
 
 class ThunderfishDialog(QDialog):
@@ -149,24 +150,29 @@ class ThunderfishDialog(QDialog):
         navi.hide()
         self.navis.append(navi)
         spec_idx = self.tabs.addTab(canvas, 'Spectrum')
-        ax = canvas.figure.subplots()
+        self.axp = canvas.figure.subplots()
         if self.power_thresh is not None:
-            ax.plot(self.power_thresh[:, 0], decibel(self.power_thresh[:, 1]),
-                    '#CCCCCC', lw=1)
+            self.axp.plot(self.power_thresh[:, 0],
+                          decibel(self.power_thresh[:, 1]),
+                          '#CCCCCC', lw=1)
         self.wave_dict = {}
         if len(self.wave_eodfs) > 0:
             self.wave_dict = \
-                plot_harmonic_groups(ax, self.wave_eodfs, self.wave_indices,
-                                     max_groups=0, skip_bad=False,
-                                     sort_by_freq=True, label_power=False,
+                plot_harmonic_groups(self.axp, self.wave_eodfs,
+                                     self.wave_indices, max_groups=0,
+                                     skip_bad=False,
+                                     sort_by_freq=True,
+                                     label_power=False,
                                      colors=self.wave_colors,
                                      markers=self.wave_markers,
                                      legend_rows=10, frameon=False,
-                                     bbox_to_anchor=(1, 1), loc='upper left')
-        plot_decibel_psd(ax, self.power_freqs, self.powers,
+                                     bbox_to_anchor=(1, 1),
+                                     loc='upper left')
+        plot_decibel_psd(self.axp, self.power_freqs, self.powers,
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
-        ax.yaxis.set_major_locator(plt.MaxNLocator(6))
+        self.axp.yaxis.set_major_locator(plt.MaxNLocator(6))
+        self.spec_annotation = []
         if self.nwave > self.npulse:
             self.tabs.setCurrentIndex(spec_idx)
         else:
@@ -219,6 +225,7 @@ class ThunderfishDialog(QDialog):
         close.pressed.connect(self.accept)
         QShortcut('q', self).activated.connect(close.animateClick)
         QShortcut('Ctrl+Q', self).activated.connect(close.animateClick)
+        QShortcut('ESC', self).activated.connect(self.clear_plots)
         hbox = QHBoxLayout()
         hbox.setContentsMargins(0, 0, 0, 0)
         hbox.addWidget(self.tools)
@@ -235,11 +242,21 @@ class ThunderfishDialog(QDialog):
             self.eod_tabs.setMaximumHeight(h)
             
     def onpick_spectrum(self, event):
+        for a in self.spec_annotation:
+            a.remove()
+        self.spec_annotation = []
         a = event.artist
         if a in self.wave_dict:
             finx, fish = self.wave_dict[a]
-        # TODO: from fishfinder.py
-        #self.annotate_fish(fish, finx)
+            self.spec_annotation = annotate_harmonic_group(self.axp, fish)
+        self.axp.get_figure().canvas.draw()
+
+    def clear_plots(self):
+        if len(self.spec_annotation) > 0:
+            for a in self.spec_annotation:
+                a.remove()
+            self.spec_annotation = []
+            self.axp.get_figure().canvas.draw()
 
     def toggle_maximize(self):
         if self.isMaximized():
