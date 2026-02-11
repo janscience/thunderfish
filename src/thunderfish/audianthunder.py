@@ -21,7 +21,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import \
     NavigationToolbar2QT as NavigationToolbar
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTime
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QHBoxLayout
 from PyQt5.QtWidgets import QWidget, QTabWidget, QToolBar, QAction, QStyle
@@ -146,6 +146,7 @@ class ThunderfishDialog(QDialog):
         # tab with power spectrum:
         canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
         canvas.mpl_connect('pick_event', self.onpick_spectrum)
+        canvas.mpl_connect('button_press_event', self.onclick_spectrum)
         navi = NavigationToolbar(canvas, self)
         navi.hide()
         self.navis.append(navi)
@@ -173,6 +174,8 @@ class ThunderfishDialog(QDialog):
                          ymarg=5.0, sstyle=spectrum_style)
         self.axp.yaxis.set_major_locator(plt.MaxNLocator(6))
         self.spec_annotation = []
+        self.spec_harmonics = []
+        self.spec_pick = QTime.currentTime()
         if self.nwave > self.npulse:
             self.tabs.setCurrentIndex(spec_idx)
         else:
@@ -242,21 +245,35 @@ class ThunderfishDialog(QDialog):
             self.eod_tabs.setMaximumHeight(h)
             
     def onpick_spectrum(self, event):
-        for a in self.spec_annotation:
-            a.remove()
-        self.spec_annotation = []
+        self.clear_plots()
         a = event.artist
         if a in self.wave_dict:
             finx, fish = self.wave_dict[a]
             self.spec_annotation = annotate_harmonic_group(self.axp, fish)
-        self.axp.get_figure().canvas.draw()
+            self.axp.get_figure().canvas.draw()
+            self.spec_pick = QTime.currentTime()
+            
+    def onclick_spectrum(self, event):
+        if self.spec_pick.msecsTo(QTime.currentTime()) < 100:
+            return
+        if event.inaxes is not None and event.inaxes == self.axp:
+            self.clear_plots()
+            f1 = event.xdata
+            for h in range(1, 20):
+                a = self.axp.axvline(h*f1, color='k', lw=1)
+                self.spec_harmonics.append(a)
+            self.axp.get_figure().canvas.draw()
 
     def clear_plots(self):
         if len(self.spec_annotation) > 0:
             for a in self.spec_annotation:
                 a.remove()
             self.spec_annotation = []
-            self.axp.get_figure().canvas.draw()
+        if len(self.spec_harmonics) > 0:
+            for a in self.spec_harmonics:
+                a.remove()
+            self.spec_harmonics = []
+        self.axp.get_figure().canvas.draw()
 
     def toggle_maximize(self):
         if self.isMaximized():
