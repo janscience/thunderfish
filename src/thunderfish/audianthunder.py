@@ -75,6 +75,7 @@ class TracePlot():
         if self.ax.get_legend() is not None:
             self.ax.get_legend().get_frame().set_color('white')
 
+            
 class PowerPlot():
     
     def __init__(self, power_freqs, powers, power_thresh,
@@ -178,6 +179,36 @@ class PowerPlot():
             self.harmonics_div = 1                
         self.ax.get_figure().canvas.draw()
 
+
+class EODPlot():
+
+    def __init__(self, data, rate, mean_eod, spectrum, props, phases, unit):
+        n_snippets = 10
+        self.canvas = FigureCanvas(Figure(figsize=(10, 5),
+                                          layout='constrained'))
+        self.navi = NavigationToolbar(self.canvas)
+        self.navi.hide()
+        gs = self.canvas.figure.add_gridspec(2, 2)
+        self.axe = self.canvas.figure.add_subplot(gs[:, 0])
+        plot_eod_waveform(self.axe, mean_eod, props, phases,
+                          unit=unit, **eod_styles)
+        if props['type'] == 'pulse' and 'times' in props:
+            plot_eod_snippets(self.axe, data, rate,
+                              mean_eod[0, 0], mean_eod[-1, 0],
+                              props['times'], n_snippets,
+                              props['flipped'],
+                              props['aoffs'], snippet_style)
+        if props['type'] == 'wave':
+            self.axa = self.canvas.figure.add_subplot(gs[0, 1])
+            self.axp = self.canvas.figure.add_subplot(gs[1, 1], sharex=self.axa)
+            plot_wave_spectrum(self.axa, self.axp, spectrum, props,
+                               unit=unit, **wave_spec_styles)
+        else:
+            self.axs = self.canvas.figure.add_subplot(gs[:, 1])
+            plot_pulse_spectrum(self.axs, spectrum, props,
+                                **pulse_spec_styles)
+    
+
         
 class ThunderfishDialog(QDialog):
 
@@ -197,6 +228,7 @@ class ThunderfishDialog(QDialog):
         self.pulse_colors = self.pulse_colors[3:]
         self.pulse_markers = self.pulse_markers[3:]
         self.wave_colors, self.wave_markers = colors_markers()
+        
         # collect stdout:
         orig_stdout = sys.stdout
         sys.stdout = StringIO()
@@ -281,37 +313,17 @@ class ThunderfishDialog(QDialog):
             vbox.addWidget(self.eod_tabs)
 
             # plot EODs:
+            self.eod_plots = []
             for k in range(len(self.eod_props)):
                 props = self.eod_props[k]
-                n_snippets = 10
-                canvas = FigureCanvas(Figure(figsize=(10, 5),
-                                             layout='constrained'))
-                navi = NavigationToolbar(canvas, self)
-                navi.hide()
-                self.navis.append(navi)
-                self.eod_tabs.addTab(canvas,
-                                     f'{k}: {self.eod_props[k]['EODf']:.0f}Hz')
-                gs = canvas.figure.add_gridspec(2, 2)
-                axe = canvas.figure.add_subplot(gs[:, 0])
-                plot_eod_waveform(axe, self.mean_eods[k], props,
-                                  self.phase_data[k],
-                                  unit=self.unit, **eod_styles)
-                if props['type'] == 'pulse' and 'times' in props:
-                    plot_eod_snippets(axe, self.data, self.rate,
-                                      self.mean_eods[k][0, 0],
-                                      self.mean_eods[k][-1, 0],
-                                      props['times'], n_snippets,
-                                      props['flipped'],
-                                      props['aoffs'], snippet_style)
-                if props['type'] == 'wave':
-                    axa = canvas.figure.add_subplot(gs[0, 1])
-                    axp = canvas.figure.add_subplot(gs[1, 1], sharex=axa)
-                    plot_wave_spectrum(axa, axp, self.spec_data[k], props,
-                                       unit=self.unit, **wave_spec_styles)
-                else:
-                    axs = canvas.figure.add_subplot(gs[:, 1])
-                    plot_pulse_spectrum(axs, self.spec_data[k], props,
-                                        **pulse_spec_styles)
+                eod_plot = EODPlot(self.data, self.rate, self.mean_eods[k],
+                                   self.spec_data[k], self.eod_props[k],
+                                   self.phase_data[k], self.unit)
+                self.eod_plots.append(eod_plot)
+                self.navis.append(eod_plot.navi)
+                self.eod_tabs.addTab(eod_plot.canvas,
+                                     f'{k}: {self.eod_props[k]['EODf']:.1f}Hz')
+                
         self.tools = self.setup_toolbar()
         close = QPushButton('&Close', self)
         close.pressed.connect(self.accept)
