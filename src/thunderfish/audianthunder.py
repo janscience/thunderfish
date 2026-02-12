@@ -17,10 +17,12 @@ except ImportError:
 
 from io import StringIO
 from pathlib import Path
+
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import \
     NavigationToolbar2QT as NavigationToolbar
+
 from PyQt5.QtCore import Qt, QTime
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QHBoxLayout
@@ -29,6 +31,7 @@ from PyQt5.QtWidgets import QPushButton, QLabel, QScrollArea, QFileDialog
 
 from thunderlab.powerspectrum import decibel, plot_decibel_psd
 from thunderlab.tabledata import write_table_args
+
 from .thunderfish import configuration, detect_eods
 from .thunderfish import rec_style, spectrum_style, eod_styles, snippet_style
 from .thunderfish import wave_spec_styles, pulse_spec_styles
@@ -41,6 +44,97 @@ from .waveanalysis import plot_wave_spectrum
 from .harmonics import annotate_harmonic_group
 
 
+class PowerPlot():
+    
+    def __init__(self, power_freqs, powers, power_thresh,
+                 wave_eodfs, wave_indices, wave_colors, wave_markers):
+        self.power_freqs = power_freqs
+        self.powers = powers
+        self.canvas = FigureCanvas(Figure(figsize=(10, 5),
+                                          layout='constrained'))
+        self.harmonics_artists = []
+        self.harmonics_div = 1
+        self.harmonics_freq = 0
+        self.annotation = []
+        self.pick = QTime.currentTime()
+        self.moved = False
+        self.canvas.mpl_connect('button_press_event', self.onpress)
+        self.canvas.mpl_connect('button_release_event', self.onrelease)
+        self.canvas.mpl_connect('motion_notify_event', self.onmove)
+        self.canvas.mpl_connect('pick_event', self.onpick)
+        QShortcut('ESC', self.canvas).activated.connect(self.clear)
+        self.navi = NavigationToolbar(self.canvas)
+        self.navi.hide()
+        self.axp = self.canvas.figure.subplots()
+        if power_thresh is not None:
+            self.axp.plot(power_thresh[:, 0],
+                          decibel(power_thresh[:, 1]),
+                          '#CCCCCC', lw=1)
+        self.wave_dict = {}
+        if len(wave_eodfs) > 0:
+            self.wave_dict = \
+                plot_harmonic_groups(self.axp, wave_eodfs,
+                                     wave_indices, max_groups=0,
+                                     skip_bad=False,
+                                     sort_by_freq=True,
+                                     label_power=False,
+                                     colors=wave_colors,
+                                     markers=wave_markers,
+                                     legend_rows=10, frameon=False,
+                                     bbox_to_anchor=(1, 1),
+                                     loc='upper left')
+        plot_decibel_psd(self.axp, self.power_freqs, self.powers,
+                         log_freq=False, min_freq=0, max_freq=3000,
+                         ymarg=5.0, sstyle=spectrum_style)
+        self.axp.yaxis.set_major_locator(plt.MaxNLocator(6))
+        
+    def onpick(self, event):
+        self.clear()
+        a = event.artist
+        if a in self.wave_dict:
+            finx, fish = self.wave_dict[a]
+            self.annotation = annotate_harmonic_group(self.axp, fish)
+            self.axp.get_figure().canvas.draw()
+            self.pick = QTime.currentTime()
+            
+    def onpress(self, event):
+        self.moved = False
+            
+    def onmove(self, event):
+        self.moved = True
+            
+    def onrelease(self, event):
+        if self.moved:
+            return
+        if self.pick.msecsTo(QTime.currentTime()) < 100:
+            return
+        if event.inaxes is not None and event.inaxes == self.axp:
+            self.clear(True)
+            if abs(self.harmonics_freq - event.xdata) <= 0.5:
+                self.harmonics_div += 1
+            else:
+                self.harmonics_div = 1                
+            self.harmonics_freq = event.xdata
+            f1 = self.harmonics_freq/self.harmonics_div
+            for h in range(1, 20*self.harmonics_div):
+                a = self.axp.axvline(h*f1, color='k', lw=1)
+                self.harmonics_artists.append(a)
+            self.axp.get_figure().canvas.draw()
+
+    def clear(self, keep_div=False):
+        if len(self.annotation) > 0:
+            for a in self.annotation:
+                a.remove()
+            self.annotation = []
+        if len(self.harmonics_artists) > 0:
+            for a in self.harmonics_artists:
+                a.remove()
+            self.harmonics_artists = []
+        if not keep_div:
+            self.harmonics_div = 1                
+        self.axp.get_figure().canvas.draw()
+
+        
 class ThunderfishDialog(QDialog):
 
     def __init__(self, time, data, unit, ampl_max, channel,
@@ -67,9 +161,9 @@ class ThunderfishDialog(QDialog):
             clip_amplitudes(self.data, max_ampl=self.ampl_max,
                             **clip_args(self.cfg, self.rate))
         # detect EODs in the data:
-        self.power_freqs, self.powers, self.wave_eodfs, self.wave_indices, \
+        power_freqs, powers, self.wave_eodfs, self.wave_indices, \
         self.eod_props, self.mean_eods, self.spec_data, self.phase_data, \
-        self.pulse_data, self.power_thresh, \
+        self.pulse_data, power_thresh, \
         self.skip_reason, self.zoom_window = \
           detect_eods(self.data, self.rate,
                       min_clip=self.min_clip, max_clip=self.max_clip,
@@ -144,40 +238,11 @@ class ThunderfishDialog(QDialog):
             ax.get_legend().get_frame().set_color('white')
 
         # tab with power spectrum:
-        canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
-        canvas.mpl_connect('pick_event', self.onpick_spectrum)
-        canvas.mpl_connect('button_press_event', self.onclick_spectrum)
-        navi = NavigationToolbar(canvas, self)
-        navi.hide()
-        self.navis.append(navi)
-        spec_idx = self.tabs.addTab(canvas, 'Spectrum')
-        self.axp = canvas.figure.subplots()
-        if self.power_thresh is not None:
-            self.axp.plot(self.power_thresh[:, 0],
-                          decibel(self.power_thresh[:, 1]),
-                          '#CCCCCC', lw=1)
-        self.wave_dict = {}
-        if len(self.wave_eodfs) > 0:
-            self.wave_dict = \
-                plot_harmonic_groups(self.axp, self.wave_eodfs,
-                                     self.wave_indices, max_groups=0,
-                                     skip_bad=False,
-                                     sort_by_freq=True,
-                                     label_power=False,
-                                     colors=self.wave_colors,
-                                     markers=self.wave_markers,
-                                     legend_rows=10, frameon=False,
-                                     bbox_to_anchor=(1, 1),
-                                     loc='upper left')
-        plot_decibel_psd(self.axp, self.power_freqs, self.powers,
-                         log_freq=False, min_freq=0, max_freq=3000,
-                         ymarg=5.0, sstyle=spectrum_style)
-        self.axp.yaxis.set_major_locator(plt.MaxNLocator(6))
-        self.spec_harmonics = []
-        self.spec_harmonics_div = 1
-        self.spec_harmonics_freq = 0
-        self.spec_annotation = []
-        self.spec_pick = QTime.currentTime()
+        self.power_plot = PowerPlot(power_freqs, powers, power_thresh,
+                                    self.wave_eodfs, self.wave_indices,
+                                    self.wave_colors, self.wave_markers)
+        self.navis.append(self.power_plot.navi)
+        spec_idx = self.tabs.addTab(self.power_plot.canvas, 'Spectrum')
         if self.nwave > self.npulse:
             self.tabs.setCurrentIndex(spec_idx)
         else:
@@ -230,7 +295,6 @@ class ThunderfishDialog(QDialog):
         close.pressed.connect(self.accept)
         QShortcut('q', self).activated.connect(close.animateClick)
         QShortcut('Ctrl+Q', self).activated.connect(close.animateClick)
-        QShortcut('ESC', self).activated.connect(self.clear_plots)
         hbox = QHBoxLayout()
         hbox.setContentsMargins(0, 0, 0, 0)
         hbox.addWidget(self.tools)
@@ -245,44 +309,6 @@ class ThunderfishDialog(QDialog):
             h = (event.size().height() - self.tools.height())//2 - 10
             self.tabs.setMaximumHeight(h)
             self.eod_tabs.setMaximumHeight(h)
-            
-    def onpick_spectrum(self, event):
-        self.clear_plots()
-        a = event.artist
-        if a in self.wave_dict:
-            finx, fish = self.wave_dict[a]
-            self.spec_annotation = annotate_harmonic_group(self.axp, fish)
-            self.axp.get_figure().canvas.draw()
-            self.spec_pick = QTime.currentTime()
-            
-    def onclick_spectrum(self, event):
-        if self.spec_pick.msecsTo(QTime.currentTime()) < 100:
-            return
-        if event.inaxes is not None and event.inaxes == self.axp:
-            self.clear_plots(True)
-            if abs(self.spec_harmonics_freq - event.xdata) <= 0.5:
-                self.spec_harmonics_div += 1
-            else:
-                self.spec_harmonics_div = 1                
-            self.spec_harmonics_freq = event.xdata
-            f1 = self.spec_harmonics_freq/self.spec_harmonics_div
-            for h in range(1, 20*self.spec_harmonics_div):
-                a = self.axp.axvline(h*f1, color='k', lw=1)
-                self.spec_harmonics.append(a)
-            self.axp.get_figure().canvas.draw()
-
-    def clear_plots(self, keep_div=False):
-        if len(self.spec_annotation) > 0:
-            for a in self.spec_annotation:
-                a.remove()
-            self.spec_annotation = []
-        if len(self.spec_harmonics) > 0:
-            for a in self.spec_harmonics:
-                a.remove()
-            self.spec_harmonics = []
-        if not keep_div:
-            self.spec_harmonics_div = 1                
-        self.axp.get_figure().canvas.draw()
 
     def toggle_maximize(self):
         if self.isMaximized():
