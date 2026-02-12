@@ -1543,7 +1543,8 @@ def plot_psd_harmonic_groups(ax, psd_freqs, psd, group_list,
                      max_freq=max_freq, ymarg=ymarg, sstyle=sstyle)
 
 
-def annotate_harmonic_group(ax, group, all_peaks=None, freq_thresh=None):
+def annotate_harmonic_group(ax, group, index=None, all_peaks=None,
+                            freq_thresh=None):
     """Annotate peaks of a harmonic group in a spectrum.
 
     Parameters
@@ -1554,6 +1555,8 @@ def annotate_harmonic_group(ax, group, all_peaks=None, freq_thresh=None):
         All harmonics of a harmonic group first column their
         frequencies and second comun their power. Element [0, 0] is
         its fundamental frequency.
+    index: None or ont
+        Index of the group.
     all_freqs: None or 2D array of float
         All peaks in the power spectrum detected with low threshold.
     freq_thresh: None or float
@@ -1573,10 +1576,10 @@ def annotate_harmonic_group(ax, group, all_peaks=None, freq_thresh=None):
         ```
 
     """
-    # freq_thresh = 0.8*self.deltaf
     fmin, fmax = ax.get_xlim()
     fwidth = fmax - fmin
     artists = []
+    f1 = group[0, 0]
     for harmonic, (freq, power) in enumerate(group):
         count = None
         if all_peaks is not None and freq_thresh is not None:
@@ -1585,8 +1588,9 @@ def annotate_harmonic_group(ax, group, all_peaks=None, freq_thresh=None):
                 continue
             count = peak[2]
         pl = []
-        pl.append(f'$f=${freq:.1f}Hz')
-        pl.append(f'$h=${harmonic + 1}')
+        if index is not None:
+            pl.append(f'{index}: {f1:.1f}Hz')
+        pl.append(f'$f{harmonic + 1} = ${freq:.1f}Hz')
         pl.append(f'$p=${power:g}')
         if count is not None:
             pl.append(f'$c=${count}')

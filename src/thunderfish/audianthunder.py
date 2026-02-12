@@ -121,10 +121,12 @@ class PowerPlot():
         
     def onpick(self, event):
         self.clear()
+        deltaf = np.mean(np.diff(self.power_freqs))
         a = event.artist
         if a in self.wave_dict:
             finx, fish = self.wave_dict[a]
-            self.annotation = annotate_harmonic_group(self.ax, fish)
+            self.annotation = annotate_harmonic_group(self.ax, fish, finx,
+                                                      freq_thresh=0.8*deltaf)
             self.ax.get_figure().canvas.draw()
             self.pick = QTime.currentTime()
             
