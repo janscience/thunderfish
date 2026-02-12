@@ -173,8 +173,10 @@ class ThunderfishDialog(QDialog):
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
         self.axp.yaxis.set_major_locator(plt.MaxNLocator(6))
-        self.spec_annotation = []
         self.spec_harmonics = []
+        self.spec_harmonics_div = 1
+        self.spec_harmonics_freq = 0
+        self.spec_annotation = []
         self.spec_pick = QTime.currentTime()
         if self.nwave > self.npulse:
             self.tabs.setCurrentIndex(spec_idx)
@@ -257,14 +259,19 @@ class ThunderfishDialog(QDialog):
         if self.spec_pick.msecsTo(QTime.currentTime()) < 100:
             return
         if event.inaxes is not None and event.inaxes == self.axp:
-            self.clear_plots()
-            f1 = event.xdata
-            for h in range(1, 20):
+            self.clear_plots(True)
+            if abs(self.spec_harmonics_freq - event.xdata) <= 0.5:
+                self.spec_harmonics_div += 1
+            else:
+                self.spec_harmonics_div = 1                
+            self.spec_harmonics_freq = event.xdata
+            f1 = self.spec_harmonics_freq/self.spec_harmonics_div
+            for h in range(1, 20*self.spec_harmonics_div):
                 a = self.axp.axvline(h*f1, color='k', lw=1)
                 self.spec_harmonics.append(a)
             self.axp.get_figure().canvas.draw()
 
-    def clear_plots(self):
+    def clear_plots(self, keep_div=False):
         if len(self.spec_annotation) > 0:
             for a in self.spec_annotation:
                 a.remove()
@@ -273,6 +280,8 @@ class ThunderfishDialog(QDialog):
             for a in self.spec_harmonics:
                 a.remove()
             self.spec_harmonics = []
+        if not keep_div:
+            self.spec_harmonics_div = 1                
         self.axp.get_figure().canvas.draw()
 
     def toggle_maximize(self):
