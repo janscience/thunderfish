@@ -793,7 +793,7 @@ def plot_eod_recording(ax, data, rate, unit=None, width=0.1,
     if i0 < 0:
         i0 = 0
     if i1 >= len(data):
-        i1 = len(data)
+        i1 = len(data) - 1
     time = np.arange(len(data))/rate + toffs
     tunit = 'sec'
     if np.abs(time[i0]) < 1.0 and np.abs(time[i1]) < 1.0:
@@ -806,11 +806,11 @@ def plot_eod_recording(ax, data, rate, unit=None, width=0.1,
     ymin = np.min(data[i0:i1])
     ymax = np.max(data[i0:i1])
     dy = ymax - ymin
-    ax.set_ylim(ymin-0.05*dy, ymax+0.05*dy)
+    ax.set_ylim(ymin - 0.05*dy, ymax + 0.05*dy)
     if len(unit) == 0 or unit == 'a.u.':
         ax.set_ylabel('Amplitude')
     else:
-        ax.set_ylabel('Amplitude [%s]' % unit)
+        ax.set_ylabel(f'Amplitude [{unit}]')
 
         
 def plot_eod_snippets(ax, data, rate, tmin, tmax, eod_times,

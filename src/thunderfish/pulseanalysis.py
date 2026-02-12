@@ -1339,7 +1339,7 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
 
 
 def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
-                    toffs=0.0, colors=None, markers=None, marker_size=10,
+                    toffs=0, colors=None, markers=None, marker_size=10,
                     legend_rows=8, **kwargs):
     """Mark pulse EODs in a plot of an EOD recording.
 
@@ -1375,6 +1375,13 @@ def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
     kwargs: 
             Key word arguments for the legend of the plot.
     """
+    width = np.diff(zoom_window)[0]
+    if zoom_window[1] > len(data)/rate:
+        zoom_window[1] = len(data)/rate
+        zoom_window[0] = zoom_window[1] - width
+    if zoom_window[0] < 0:
+        zoom_window[0] = 0
+        zoom_window[1] = width
     k = 0
     for eod in eod_props:
         if eod['type'] != 'pulse':
@@ -1382,8 +1389,8 @@ def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
         if 'times' not in eod:
             continue
 
-        width = np.min([width, np.diff(zoom_window)[0]])
-        while len(eod['peaktimes'][(eod['peaktimes']>(zoom_window[1]-width)) & (eod['peaktimes']<(zoom_window[1]))]) == 0:
+        width = min(width, np.diff(zoom_window)[0])
+        while len(eod['peaktimes'][(eod['peaktimes'] > (zoom_window[1] - width)) & (eod['peaktimes'] < (zoom_window[1]))]) == 0:
             width *= 2
             if zoom_window[1] - width < 0:
                 width = width/2
@@ -1420,17 +1427,17 @@ def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
         else:
             ax.legend(numpoints=1, **kwargs)
 
-    # reset window so at least one EOD of each cluster is visible    
-    if len(zoom_window)>0:
-        ax.set_xlim(max(toffs,toffs+zoom_window[1]-width), toffs+zoom_window[1])
-
-        i0 = max(0,int((zoom_window[1]-width)*rate))
-        i1 = int(zoom_window[1]*rate)
-
+    # reset window such that at least one EOD of each cluster is visible    
+    if len(zoom_window) > 0:
+        t0 = max(toffs, toffs + zoom_window[1] - width)
+        t1 = min(t0 + width, toffs + zoom_window[1])
+        ax.set_xlim(t0, t1)
+        i0 = int((t0 - toffs)*rate)
+        i1 = int((t1 - toffs)*rate)
         ymin = np.min(data[i0:i1])
         ymax = np.max(data[i0:i1])
         dy = ymax - ymin
-        ax.set_ylim(ymin-0.05*dy, ymax+0.05*dy)
+        ax.set_ylim(ymin - 0.05*dy, ymax + 0.05*dy)
 
 
 def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
