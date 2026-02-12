@@ -44,6 +44,37 @@ from .waveanalysis import plot_wave_spectrum
 from .harmonics import annotate_harmonic_group
 
 
+class TracePlot():
+    
+    def __init__(self, time, data, unit, eod_props, wave_eodfs,
+                 pulse_colors, pulse_markers):
+        self.canvas = FigureCanvas(Figure(figsize=(10, 5),
+                                          layout='constrained'))
+        self.navi = NavigationToolbar(self.canvas)
+        self.navi.hide()
+        self.ax = self.canvas.figure.subplots()
+        rate = 1/np.mean(np.diff(time))
+        twidth = 0.1
+        if len(eod_props) > 0:
+            if eod_props[0]['type'] == 'wave':
+                twidth = 5.0/eod_props[0]['EODf']
+            else:
+                if len(wave_eodfs) > 0:
+                    twidth = 3.0/eod_props[0]['EODf']
+                else:
+                    twidth = 10.0/eod_props[0]['EODf']
+        twidth = (1+twidth//0.005)*0.005
+        plot_eod_recording(self.ax, data, rate, unit,
+                           twidth, time[0], rec_style)
+        zoom_window = [1.2, 1.3]
+        plot_pulse_eods(self.ax, data, rate, zoom_window,
+                        twidth, eod_props, time[0],
+                        colors=pulse_colors,
+                        markers=pulse_markers,
+                        frameon=True, loc='upper right')
+        if self.ax.get_legend() is not None:
+            self.ax.get_legend().get_frame().set_color('white')
+
 class PowerPlot():
     
     def __init__(self, power_freqs, powers, power_thresh,
@@ -65,15 +96,15 @@ class PowerPlot():
         QShortcut('ESC', self.canvas).activated.connect(self.clear)
         self.navi = NavigationToolbar(self.canvas)
         self.navi.hide()
-        self.axp = self.canvas.figure.subplots()
+        self.ax = self.canvas.figure.subplots()
         if power_thresh is not None:
-            self.axp.plot(power_thresh[:, 0],
-                          decibel(power_thresh[:, 1]),
-                          '#CCCCCC', lw=1)
+            self.ax.plot(power_thresh[:, 0],
+                         decibel(power_thresh[:, 1]),
+                         '#CCCCCC', lw=1)
         self.wave_dict = {}
         if len(wave_eodfs) > 0:
             self.wave_dict = \
-                plot_harmonic_groups(self.axp, wave_eodfs,
+                plot_harmonic_groups(self.ax, wave_eodfs,
                                      wave_indices, max_groups=0,
                                      skip_bad=False,
                                      sort_by_freq=True,
@@ -83,18 +114,18 @@ class PowerPlot():
                                      legend_rows=10, frameon=False,
                                      bbox_to_anchor=(1, 1),
                                      loc='upper left')
-        plot_decibel_psd(self.axp, self.power_freqs, self.powers,
+        plot_decibel_psd(self.ax, self.power_freqs, self.powers,
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
-        self.axp.yaxis.set_major_locator(plt.MaxNLocator(6))
+        self.ax.yaxis.set_major_locator(plt.MaxNLocator(6))
         
     def onpick(self, event):
         self.clear()
         a = event.artist
         if a in self.wave_dict:
             finx, fish = self.wave_dict[a]
-            self.annotation = annotate_harmonic_group(self.axp, fish)
-            self.axp.get_figure().canvas.draw()
+            self.annotation = annotate_harmonic_group(self.ax, fish)
+            self.ax.get_figure().canvas.draw()
             self.pick = QTime.currentTime()
             
     def onpress(self, event):
@@ -108,7 +139,7 @@ class PowerPlot():
             return
         if self.pick.msecsTo(QTime.currentTime()) < 100:
             return
-        if event.inaxes is not None and event.inaxes == self.axp:
+        if event.inaxes is not None and event.inaxes == self.ax:
             self.clear(True)
             if abs(self.harmonics_freq - event.xdata) <= 0.5:
                 self.harmonics_div += 1
@@ -116,10 +147,12 @@ class PowerPlot():
                 self.harmonics_div = 1                
             self.harmonics_freq = event.xdata
             f1 = self.harmonics_freq/self.harmonics_div
-            for h in range(1, 20*self.harmonics_div):
-                a = self.axp.axvline(h*f1, color='k', lw=1)
+            for h in range(1, 1000*self.harmonics_div):
+                if h*f1 > self.power_freqs[-1]:
+                    break
+                a = self.ax.axvline(h*f1, color='k', lw=1)
                 self.harmonics_artists.append(a)
-            self.axp.get_figure().canvas.draw()
+            self.ax.get_figure().canvas.draw()
 
     def clear(self, keep_div=False):
         if len(self.annotation) > 0:
@@ -132,7 +165,7 @@ class PowerPlot():
             self.harmonics_artists = []
         if not keep_div:
             self.harmonics_div = 1                
-        self.axp.get_figure().canvas.draw()
+        self.ax.get_figure().canvas.draw()
 
         
 class ThunderfishDialog(QDialog):
@@ -201,8 +234,6 @@ class ThunderfishDialog(QDialog):
         self.log.setMinimumSize(self.log.sizeHint())
         self.scroll = QScrollArea(self)
         self.scroll.setWidget(self.log)
-        #vsb = self.scroll.verticalScrollBar()
-        #vsb.setValue(vsb.maximum())
         self.tabs.addTab(self.scroll, 'Log')
 
         # plots:
@@ -210,32 +241,11 @@ class ThunderfishDialog(QDialog):
         plt.rcParams['axes.spines.right'] = False
         
         # tab with recording trace:
-        canvas = FigureCanvas(Figure(figsize=(10, 5), layout='constrained'))
-        navi = NavigationToolbar(canvas, self)
-        navi.hide()
-        self.navis.append(navi)
-        trace_idx = self.tabs.addTab(canvas, 'Trace')
-        ax = canvas.figure.subplots()
-        twidth = 0.1
-        if len(self.eod_props) > 0:
-            if self.eod_props[0]['type'] == 'wave':
-                twidth = 5.0/self.eod_props[0]['EODf']
-            else:
-                if len(self.wave_eodfs) > 0:
-                    twidth = 3.0/self.eod_props[0]['EODf']
-                else:
-                    twidth = 10.0/self.eod_props[0]['EODf']
-        twidth = (1+twidth//0.005)*0.005
-        plot_eod_recording(ax, self.data, self.rate, self.unit,
-                           twidth, time[0], rec_style)
-        self.zoom_window = [1.2, 1.3]
-        plot_pulse_eods(ax, self.data, self.rate, self.zoom_window,
-                        twidth, self.eod_props, time[0],
-                        colors=self.pulse_colors,
-                        markers=self.pulse_markers,
-                        frameon=True, loc='upper right')
-        if ax.get_legend() is not None:
-            ax.get_legend().get_frame().set_color('white')
+        self.trace_plot = TracePlot(self.time, self.data, self.unit,
+                                    self.eod_props, self.wave_eodfs,
+                                    self.pulse_colors, self.pulse_markers)
+        self.navis.append(self.trace_plot.navi)
+        trace_idx = self.tabs.addTab(self.trace_plot.canvas, 'Trace')
 
         # tab with power spectrum:
         self.power_plot = PowerPlot(power_freqs, powers, power_thresh,
@@ -243,6 +253,7 @@ class ThunderfishDialog(QDialog):
                                     self.wave_colors, self.wave_markers)
         self.navis.append(self.power_plot.navi)
         spec_idx = self.tabs.addTab(self.power_plot.canvas, 'Spectrum')
+        
         if self.nwave > self.npulse:
             self.tabs.setCurrentIndex(spec_idx)
         else:
