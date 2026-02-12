@@ -143,6 +143,9 @@ class PowerPlot():
             return
         if event.inaxes is not None and event.inaxes == self.ax:
             self.clear(True)
+            pmin, pmax = self.ax.get_ylim()
+            fmin, fmax = self.ax.get_xlim()
+            fwidth = fmax - fmin
             if abs(self.harmonics_freq - event.xdata) <= 0.5:
                 self.harmonics_div += 1
             else:
@@ -152,6 +155,12 @@ class PowerPlot():
             for h in range(1, 1000*self.harmonics_div):
                 if h*f1 > self.power_freqs[-1]:
                     break
+                if h == 1:
+                    a = self.ax.text(f1 + 0.01*fwidth, pmax, f'{f1:.1f}Hz',
+                                     ha='left', va='top',
+                                     bbox=dict(boxstyle='round',
+                                               facecolor='white'))
+                    self.harmonics_artists.append(a)
                 a = self.ax.axvline(h*f1, color='k', lw=1)
                 self.harmonics_artists.append(a)
             self.ax.get_figure().canvas.draw()
