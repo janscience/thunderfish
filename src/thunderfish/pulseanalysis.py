@@ -1375,13 +1375,20 @@ def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
     kwargs: 
             Key word arguments for the legend of the plot.
     """
-    width = np.diff(zoom_window)[0]
-    if zoom_window[1] > len(data)/rate:
-        zoom_window[1] = len(data)/rate
-        zoom_window[0] = zoom_window[1] - width
-    if zoom_window[0] < 0:
-        zoom_window[0] = 0
-        zoom_window[1] = width
+    zwidth = width
+    if len(zoom_window) == 2:
+        zwidth = np.diff(zoom_window)[0]
+        if zoom_window[1] > len(data)/rate:
+            zoom_window[1] = len(data)/rate
+            zoom_window[0] = zoom_window[1] - width
+        if zoom_window[0] < 0:
+            zoom_window[0] = 0
+            zoom_window[1] = width
+    else:
+        t0 = 0.5*len(data)/rate - zwidth/2
+        if t0 < 0:
+            t0 = 0
+        zoom_window = (t0, t0 + zwidth)
     k = 0
     for eod in eod_props:
         if eod['type'] != 'pulse':
@@ -1389,7 +1396,7 @@ def plot_pulse_eods(ax, data, rate, zoom_window, width, eod_props,
         if 'times' not in eod:
             continue
 
-        width = min(width, np.diff(zoom_window)[0])
+        width = min(width, zwidth)
         while len(eod['peaktimes'][(eod['peaktimes'] > (zoom_window[1] - width)) & (eod['peaktimes'] < (zoom_window[1]))]) == 0:
             width *= 2
             if zoom_window[1] - width < 0:

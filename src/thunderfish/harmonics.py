@@ -1450,10 +1450,8 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         else:
             if k >= len(markers):
                 break
-            aa = ax.plot(x, y, linestyle='None', marker=markers[k],
+            aa = ax.plot(x, y, label=label, linestyle='None', marker=markers[k],
                          mec=None, mew=0.0, ms=msize, **color_kwargs)
-        labels.append(label)
-        artists.append(aa[0])
         for a in aa:
             a.set_picker(8)
             groups_dict[a] = [i, group]
@@ -1464,11 +1462,9 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
     if ncol < 1:
         ncol = 1
     try:
-        handles = ax.legend(artists, labels, numpoints=1, ncols=ncol,
-                            **kwargs)
+        handles = ax.legend(numpoints=1, ncols=ncol, **kwargs)
     except TypeError:
-        handles = ax.legend(artists, labels, numpoints=1, ncol=ncol,
-                                 **kwargs)
+        handles = ax.legend(numpoints=1, ncol=ncol, **kwargs)
     lines = handles.get_lines()
     for k in range(min(len(lines), len(idx))):
         a = lines[k]
