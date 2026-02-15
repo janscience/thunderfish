@@ -182,8 +182,8 @@ def save_configuration(cfg, config_file):
         cfg.write(config_file)
 
 
-def detect_eods(data, rate, min_clip, max_clip, name, mode,
-                verbose, plot_level, cfg):
+def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
+                name, mode, verbose, plot_level, cfg):
     """Detect EODs of all fish present in the data.
 
     Parameters
@@ -192,6 +192,11 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
         The recording in which to detect EODs.
     rate: float
         Sampling rate of the dataset.
+    power_freqs: 1D array of float or None
+        Frequencies for `powers`. Can be empty.
+    powers: 2D array of float or None
+        Spectrogram of the data, if available. First column are
+        frequencies, second column times.
     min_clip: float
         Minimum amplitude that is not clipped.
     max_clip: float
@@ -244,17 +249,18 @@ def detect_eods(data, rate, min_clip, max_clip, name, mode,
         None if no pulse fish was detected.
     skip_reason: list of string
         Reasons, why an EOD was discarded.
+
     """
     dfreq = np.nan
     nfft = 0
-    power_freqs = np.zeros(0)
-    powers = np.zeros(0)
     wave_eodfs = []
     wave_indices = []
     if 'w' in mode:
         # detect wave fish:
-        power_freqs, power_times, powers = spectrogram(data, rate,
-                                                       **spectrum_args(cfg))
+        if power_freqs is None or powers is None or \
+           power_freqs[1] > cfg.value('frequencyResolution'):
+            power_freqs, power_times, powers = \
+                spectrogram(data, rate, **spectrum_args(cfg))
         dfreq = np.mean(np.diff(power_freqs))
         nfft = int(rate/dfreq)
         h_kwargs = psd_peak_detection_args(cfg)
@@ -1472,8 +1478,8 @@ def thunderfish(filename, load_kwargs, cfg, channel=0,
         # detect EODs in the data:
         power_freqs, powers, wave_eodfs, wave_indices, eod_props, \
         mean_eods, spec_data, phase_data, pulse_data, power_thresh, skip_reason, zoom_window = \
-          detect_eods(data, rate, min_clip, max_clip, filename, mode,
-                      verbose, plot_level, cfg)
+          detect_eods(data, rate, None, None, min_clip, max_clip,
+                      filename, mode, verbose, plot_level, cfg)
         if not found_bestwindow:
             wave_eodfs = []
             wave_indices = []
