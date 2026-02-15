@@ -73,7 +73,9 @@ def waveeod_waveform(data, rate, freq, win_fac=2.0):
     eod_times: 1-D array
         Times of EOD peaks in seconds that have been actually used to
         calculate the averaged EOD waveform.
-
+    skip_reason: str
+        An empty string if the waveform is good, otherwise a string
+        indicating the failure.
     """
 
     @jit(nopython=True)
@@ -129,7 +131,7 @@ def waveeod_waveform(data, rate, freq, win_fac=2.0):
     mean_eod = np.zeros((0, 3))
     eod_times = np.zeros((0))
     if len(waves) == 0:
-        return mean_eod, eod_times
+        return mean_eod, eod_times, 'ERROR: empty frequency range'
     for k in range(len(waves)):
         period = int(np.ceil(rate/freqs[k]))
         i = np.argmax(waves[k][:period])
@@ -146,14 +148,14 @@ def waveeod_waveform(data, rate, freq, win_fac=2.0):
         waves = waves[select]
         times = [times[k] for k in range(len(times)) if select[k]]
         if len(waves) == 0:
-            return mean_eod, eod_times
+            return mean_eod, eod_times, 'no stable waveforms'
     # only the largest snippets:
     ampls = np.std(waves, axis=1)
     select = ampls >= min_ampl_frac*np.max(ampls)
     waves = waves[select]
     times = [times[k] for k in range(len(times)) if select[k]]
     if len(waves) == 0:
-        return mean_eod, eod_times
+        return mean_eod, eod_times, 'ERROR: no large waveform'
     """
     #plt.plot(freqs)
     plt.plot(waves.T)
@@ -164,7 +166,7 @@ def waveeod_waveform(data, rate, freq, win_fac=2.0):
     mean_eod[:, 1] = np.mean(waves, axis=0)
     mean_eod[:, 2] = np.std(waves, axis=0)
     eod_times = np.concatenate(times)
-    return mean_eod, eod_times
+    return mean_eod, eod_times, ''
 
 
 def fourier_series(t, freq, *ap):

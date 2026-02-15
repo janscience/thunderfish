@@ -281,8 +281,9 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
         powers = np.mean(powers, 1)
         if verbose > 0:
             if len(wave_eodfs) > 0:
-                print('found %2d EOD frequencies consistent in all power spectra:' % len(wave_eodfs))
-                print('  ' + ' '.join(['%.1f' % freq[0, 0] for freq in wave_eodfs]))
+                fstr = 'ies' if len(wave_eodfs) > 1 else 'y'
+                print(f'found {len(wave_eodfs):2d} EOD frequenc{fstr} consistent in all power spectra:')
+                print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
             else:
                 print('no fundamental frequencies are consistent in all power spectra')
 
@@ -347,12 +348,11 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                 phase_data.append(phases)
                 pulseeod_data.append(pulse)
                 if verbose > 0:
-                    print('take %6.1fHz pulse fish: %s' % (props['EODf'], msg))
+                    print(f'take   {props['EODf']:6.1f}Hz pulse fish: {msg}')
             else:
-                skip_reason += ['%.1fHz pulse fish %s' % (props['EODf'], skips)]
+                skip_reason += [f'{props['EODf']:.1f}Hz pulse fish {skips}']
                 if verbose > 0:
-                    print('skip %6.1fHz pulse fish: %s (%s)' %
-                          (props['EODf'], skips, msg))
+                    print(f'skip   {props['EODf']:6.1f}Hz pulse fish: {skips} ({msg})')
 
             # threshold for wave fish peaks based on single pulse spectra:
             if len(skips) == 0 or skipped_clipped:
@@ -390,7 +390,7 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                     if nbelow > 0:
                         wave_eodfs.pop(n-1-k)
                         if verbose > 0:
-                            print('skip %6.1fHz wave  fish: %2d harmonics are below pulsefish threshold' % (fish[0,0], nbelow))
+                            print(f'skip   {fish[0,0]:6.1f}Hz wave  fish: {nbelow:2d} harmonics are below pulsefish threshold')
                         break
 
     if 'w' in mode:
@@ -406,9 +406,12 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                 eod_waveform(data, rate, eod_times, win_fac=3.0, min_win=0.0,
                              min_sem=(k==0), **eod_waveform_args(cfg))
             """
-            mean_eod, eod_times = \
+            mean_eod, eod_times, skip_reason = \
                 waveeod_waveform(data, rate, fish[0, 0], win_fac=3.0)
             if len(mean_eod) == 0:
+                if verbose > 0:
+                    print(f'skip   {fish[0, 0]:6.1f}Hz wave  fish:',
+                          skip_reason)
                 continue
             unfilter_cutoff = cfg.value('unfilterCutoff')
             if unfilter_cutoff and unfilter_cutoff > 0:
@@ -429,12 +432,9 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
             if props['p-p-amplitude'] < 0.01*max_pulse_amplitude:
                 rm_indices = power_indices[k:]
                 if verbose > 0:
-                    print('skip %6.1fHz wave  fish: power=%5.1fdB, p-p amplitude=%5.1fdB smaller than pulse fish=%5.1dB - 20dB' %
-                          (props['EODf'], decibel(fish_powers[idx]),
-                           decibel(props['p-p-amplitude']), decibel(max_pulse_amplitude)))
+                    print(f'skip   {props['EODf']:6.1f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB, p-p amplitude={decibel(props['p-p-amplitude']):5.1f}dB smaller than pulse fish={decibel(max_pulse_amplitude):5.1f}dB - 20dB')
                     for idx in rm_indices[1:]:
-                        print('skip %6.1fHz wave  fish: power=%5.1fdB even smaller' %
-                              (wave_eodfs[idx][0,0], decibel(fish_powers[idx])))
+                        print(f'skip   {wave_eodfs[idx][0,0]:6.1f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB even smaller')
                 wave_eodfs = [eodfs for idx, eodfs in enumerate(wave_eodfs)
                               if idx not in rm_indices]
                 wave_indices = np.array([idcs for idx, idcs in enumerate(wave_indices)
@@ -450,13 +450,14 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                 phase_data.append(dict())
                 pulseeod_data.append(dict())
                 if verbose > 0:
-                    print('take   %6.1fHz wave  fish: %s' % (props['EODf'], msg))
+                    print(f'take   {props['EODf']:6.1f}Hz wave  fish:',
+                          msg)
             else:
                 wave_indices[idx] = -2 if remove else -1
-                skip_reason += ['%.1fHz wave fish %s' % (props['EODf'], skips)]
+                skip_reason += [f'{props['EODf']:.1f}Hz wave fish {", ".join(skips)}']
                 if verbose > 0:
-                    print('%-6s %6.1fHz wave  fish: %s (%s)' %
-                          ('remove' if remove else 'skip', props['EODf'], skips, msg))
+                    rstr = 'remove' if remove else 'skip'
+                    print(f'{rstr:<6s} {props['EODf']:6.1f}Hz wave  fish: {", ".join(skips)} ({msg})')
         wave_eodfs = [eodfs for idx, eodfs in zip(wave_indices, wave_eodfs) if idx > -2]
         wave_indices = np.array([idx for idx in wave_indices if idx > -2], dtype=int)
     return (power_freqs, powers, wave_eodfs, wave_indices, eod_props,
