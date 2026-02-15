@@ -3,7 +3,7 @@ Compare fishlists created by the harmonics module in order to create a fishlist 
 fishes present in all fishlists.
 
 - `consistent_fishes()`: Compares a list of fishlists and builds a consistent fishlist.
-- `plot_consistent_fishes()`: Visualize the algorithm of consisten_fishes().
+- `plot_selected_frequencies()`: plot all fundamental frequencies and mark selected frequencies with a bar.
 """
 
 import numpy as np
@@ -59,7 +59,7 @@ def find_consistency(fundamentals, df_th=1.0):
     return consistent_fundamentals, index
 
 
-def consistent_fishes(fishlists, verbose=0, plot_data_func=None, df_th=1.0, **kwargs):
+def consistent_fishes(fishlists, df_th=1):
     """
     Compares several fishlists to create a fishlist only containing these fishes present in all these fishlists.
 
@@ -71,16 +71,10 @@ def consistent_fishes(fishlists, verbose=0, plot_data_func=None, df_th=1.0, **kw
     fishlists: list of list of 2D array
         List of fishlists with harmonics and each frequency and power.
         fishlists[fishlist][fish][harmonic][frequency, power]
-    plot_data_func:
-        Function that visualizes what consistent_fishes() did.
-    verbose: int
-        When the value larger than one you get additional shell output.
     df_th: float
         Frequency threshold for the comparison of different fishlists in Hertz. If the fundamental
         frequencies of two fishes from different fishlists vary less than this threshold they are
         assigned as the same fish.
-    **kwargs: dict
-        Passed on to plot function.
 
     Returns
     -------
@@ -89,9 +83,6 @@ def consistent_fishes(fishlists, verbose=0, plot_data_func=None, df_th=1.0, **kw
         containing these fishes that are available in every fishlist in fishlists.
         fishlist[fish][harmonic][frequency, power]
     """
-    if verbose >= 1:
-        print('Finding consistent fishes out of %d fishlists ...' % len(fishlists))
-
     fundamentals = fundamental_freqs(fishlists)
     if len(fundamentals) == 0:
         return []
@@ -103,82 +94,88 @@ def consistent_fishes(fishlists, verbose=0, plot_data_func=None, df_th=1.0, **kw
     for idx in index:
         filtered_fishlist.append(fishlists[0][idx])
 
-    if plot_data_func:
-        plot_data_func(fishlists, filtered_fishlist, **kwargs)
-
     return filtered_fishlist
 
 
-def plot_consistent_fishes(fishlists, filtered_fishlist, ax, fs):
+def plot_selected_frequencies(ax, group_list, selected_groups, label=None,
+                              freq_style=dict(ls='none', marker='o',
+                                              color='k', ms=10),
+                              bar_style=dict(ls='-', color='c', lw=12)):
     """
-    Creates an axis for plotting all lists and the consistent values marked with a bar.
+    Plot all fundamental frequencies and mark selected frequencies with a bar.
 
     Parameters
     ----------
-    filtered_fishlist: 3-D array
-        Contains power and frequency of these fishes that hve been detected in
-        several powerspectra using different resolutions.
-    fishlists: 4-D array or 3-D array
-        List of or single fishlists with harmonics and each frequency and power.
-        fishlists[fishlist][fish][harmonic][frequency, power]
-        fishlists[fish][harmonic][frequency, power]
-    ax: axis for plot
-        Empty axis that is filled with content in the function.
-    fs: int
-        Fontsize for the plot.
+    ax: matplotlib.Axes
+        Axes for plotting.
+    group_list: list of list of 2-D arrays of float
+        Harmonic groups as returned by severla calls to extract_fundamentals()
+        or harmonic_groups() with the element [0, 0] of the harmonic groups
+        being the fundamental frequency, and element[0, 1] the corresponding
+        power.
+    selected_groups: list of 2-D arrays of float
+        Frequencies and power of selected harmonic groups from `group_list`.
+    label: str or None
+        Plot label for the selected groups that is added to the legend.
+    freq_style: dict
+        Plot style for marking fundamental frequencies of `group_list`.
+    bar_style: dict
+        Plot style for marking frequencies from `selected_groupss`.
     """
-    for list in np.arange(len(fishlists)):
-        for fish in np.arange(len(fishlists[list])):
-            ax.plot(list + 1, fishlists[list][fish][0][0], 'k.', markersize=10)
-
-    for fish in np.arange(len(filtered_fishlist)):
-        x = np.arange(len(fishlists)) + 1
-        y = [filtered_fishlist[fish][0][0] for i in range(len(fishlists))]
-        if fish == 0:
-            ax.plot(x, y, '-r', linewidth=10, alpha=0.5, label='consistent in all lists')
+    # mark selected frequencies:
+    for index in range(len(selected_groups)):
+        x = [0.75, len(group_list) + 0.25]
+        y = [selected_groups[index][0, 0]]*2
+        if index == 0 and label is not None:
+            ax.plot(x, y, label=label, **bar_style)
         else:
-            ax.plot(x, y, '-r', linewidth=10, alpha=0.5)
-    ax.set_xlim([0, len(fishlists) + 1])
-    ax.set_ylabel('value', fontsize=fs)
-    ax.set_xlabel('list no.', fontsize=fs)
+            ax.plot(x, y, **bar_style)
+    # mark all frequencies:
+    for index in range(len(group_list)):
+        for group in group_list[index]:
+            ax.plot(index + 1, group[0, 0], **freq_style)
+    ax.set_xlim([0.25, len(group_list) + 0.75])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+    ax.set_ylabel('frequency [Hz]')
+    ax.set_xlabel('group index')
 
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    
-    print('Creating one fishlist containing only the fishes that are consistant in several fishlists.')
-    print('The input structure looks like this:')
-    print('  fishlists[list][fish][harmonic][frequency, power]')
-    print('')
-    print('Usage:')
-    print('  python -m thunderfish.consistentfishes')
-    print('')
 
-    # example 4-D array containing of 4 fishlists all haveing 3 fishes with 1 harmonic with frequency and power
-    fishlists = [[np.array([np.array([350, 0])]), np.array([np.array([700.2, 0])]), np.array([np.array([1050, 0])])],
-                 [np.array([np.array([350.1, 0])]), np.array([np.array([699.8, 0])]), np.array([np.array([250.2, 0])])],
-                 [np.array([np.array([349.7, 0])]), np.array([np.array([700.4, 0])]),
-                  np.array([np.array([1050.2, 0])])],
-                 [np.array([np.array([349.8, 0])]), np.array([np.array([700.5, 0])]),
-                  np.array([np.array([1050.3, 0])])]]
-    #
+    def mkg(f, n=5):
+        return np.array([(h*f, 0) for h in range(1, n)])
+
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, layout='constrained', sharey=True)
     
-    fig, ax = plt.subplots()
-    filtered_fishlist = consistent_fishes(fishlists, verbose=1, plot_data_func=plot_consistent_fishes, ax=ax, fs=12)
-    plt.show()
+    
+    group_list = [[mkg(350.0), mkg(700.2), mkg(960.4)],
+                  [mkg(274.1), mkg(523.7), mkg(350.2), mkg(699.8)],
+                  [mkg(349.7), mkg(523.4), mkg(700.8), mkg(959.8)],
+                  [mkg(349.8), mkg(700.4), mkg(960.3)]]
+    selected_groups = consistent_fishes(group_list)
+    ax1.set_title('consistent groups')
+    plot_selected_frequencies(ax1, group_list, selected_groups)
 
     # check almost empty fishlist:
-    fishlists = [[], [np.array([[349.8, 0], [700.5, 0], [1050.3, 0]])], []]
-    filtered_fishlist = consistent_fishes(fishlists, verbose=1)
-    print(filtered_fishlist)
+    group_list = [[], [mkg(523.7)], [mkg(523.4)], []]
+    selected_groups = consistent_fishes(group_list)
+    ax2.set_title('consistent in mostly empty group list')
+    plot_selected_frequencies(ax2, group_list, selected_groups)
 
+    # check single fishlist:
+    group_list = [[mkg(523.7)]]
+    selected_groups = consistent_fishes(group_list)
+    ax3.set_title('consistent in single group list')
+    plot_selected_frequencies(ax3, group_list, selected_groups)
+
+    ## TODO: move to tests/ !
     # check empty fishlist:
-    fishlists = [[], []]
-    filtered_fishlist = consistent_fishes(fishlists, verbose=1)
-    print(filtered_fishlist)
+    group_list = [[], []]
+    selected_groups = consistent_fishes(group_list)
 
     # check really empty fishlist:
-    fishlists = []
-    filtered_fishlist = consistent_fishes(fishlists, verbose=1)
-    print(filtered_fishlist)
+    group_list = []
+    selected_groups = consistent_fishes(group_list)
     
+    plt.show()

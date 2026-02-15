@@ -1285,7 +1285,7 @@ def unique(freqs, df_thresh, mode='power', nextfs=0):
 
     Returns
     -------
-    uniqe_freqs: (list of (list of ...)) list of 2-D arrays
+    unique_freqs: (list of (list of ...)) list of 2-D arrays
         Same as `freqs` but elements with similar fundamental frequencies
         removed.
     """
@@ -1303,13 +1303,13 @@ def unique(freqs, df_thresh, mode='power', nextfs=0):
         if mode == 'power':
             mask = unique_mask(freqs, df_thresh, nextfs)
         elif mode == 'relpower':
-            power_freqs = [f[:,[0, 2, 1]] for f in add_relative_power(freqs)]
+            power_freqs = [f[:, [0, 2, 1]] for f in add_relative_power(freqs)]
             mask = unique_mask(power_freqs, df_thresh, nextfs)
         elif mode == 'rank':
-            rank_freqs = [f[:,[0, 2, 1]] for f in add_power_ranks(freqs)]
+            rank_freqs = [f[:, [0, 2, 1]] for f in add_power_ranks(freqs)]
             mask = unique_mask(rank_freqs, df_thresh, nextfs)
         else:
-            raise ValueError('%s is not a valid mode for unique(). Choose one of "power" or "rank"')
+            raise ValueError('%s is not a valid mode for unique(). Choose one of "power", "relpower", or "rank"')
         unique_freqs = []
         for f, m in zip(freqs, mask):
             unique_freqs.append(f[m])
@@ -1417,10 +1417,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
     # sort by frequency:
     if sort_by_freq:
         freqs = np.array([group_list[group][0,0] for group in idx])
-        if legend_rows > 0 and legend_rows < len(freqs):
-            idx = idx[np.argsort(freqs[:legend_rows])]
-        else:
-            idx = idx[np.argsort(freqs)]
+        idx = idx[np.argsort(freqs)]
 
     # plot:
     groups_dict = {}
@@ -1446,11 +1443,11 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
             else:
                 label = ' ' + label + ' '
         if markers is None:
-            aa = ax.plot(x, y, 'o', ms=msize, **color_kwargs)
+            aa = ax.plot(x, y, 'o', label=label, ms=msize, **color_kwargs)
         else:
             if k >= len(markers):
                 break
-            aa = ax.plot(x, y, label=label, linestyle='None', marker=markers[k],
+            aa = ax.plot(x, y, label=label, linestyle='none', marker=markers[k],
                          mec=None, mew=0.0, ms=msize, **color_kwargs)
         for a in aa:
             a.set_picker(8)
@@ -1458,7 +1455,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         k += 1
 
     # legend:
-    ncol = (len(idx) - 1) // legend_rows + 1 if legend_rows > 0 else 1
+    ncol = (k - 1) // legend_rows + 1 if legend_rows > 0 else 1
     if ncol < 1:
         ncol = 1
     try:

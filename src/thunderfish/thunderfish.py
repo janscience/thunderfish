@@ -269,7 +269,7 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
         for i, psd in enumerate(powers.T):
             wave_eodfs = harmonic_groups(power_freqs, psd, verbose-1,
                                          **h_kwargs)[0]
-            if verbose > 0 and len(power_times) > 1:
+            if verbose > 0 and powers.shape[1] > 1:
                 print(f'fundamental frequencies detected in spectrum of window {i}:')
                 if len(wave_eodfs) > 0:
                     print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
@@ -406,12 +406,11 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                 eod_waveform(data, rate, eod_times, win_fac=3.0, min_win=0.0,
                              min_sem=(k==0), **eod_waveform_args(cfg))
             """
-            mean_eod, eod_times, skip_reason = \
+            mean_eod, eod_times, skips = \
                 waveeod_waveform(data, rate, fish[0, 0], win_fac=3.0)
             if len(mean_eod) == 0:
                 if verbose > 0:
-                    print(f'skip   {fish[0, 0]:6.1f}Hz wave  fish:',
-                          skip_reason)
+                    print(f'skip   {fish[0, 0]:6.1f}Hz wave  fish:', skips)
                 continue
             unfilter_cutoff = cfg.value('unfilterCutoff')
             if unfilter_cutoff and unfilter_cutoff > 0:
@@ -454,10 +453,10 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                           msg)
             else:
                 wave_indices[idx] = -2 if remove else -1
-                skip_reason += [f'{props['EODf']:.1f}Hz wave fish {", ".join(skips)}']
+                skip_reason += [f'{props["EODf"]:.1f}Hz wave fish {skips}']
                 if verbose > 0:
                     rstr = 'remove' if remove else 'skip'
-                    print(f'{rstr:<6s} {props['EODf']:6.1f}Hz wave  fish: {", ".join(skips)} ({msg})')
+                    print(f'{rstr:<6s} {props["EODf"]:6.1f}Hz wave  fish: {skips} ({msg})')
         wave_eodfs = [eodfs for idx, eodfs in zip(wave_indices, wave_eodfs) if idx > -2]
         wave_indices = np.array([idx for idx in wave_indices if idx > -2], dtype=int)
     return (power_freqs, powers, wave_eodfs, wave_indices, eod_props,

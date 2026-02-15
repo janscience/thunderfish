@@ -313,16 +313,17 @@ class ThunderfishDialog(QDialog):
             vbox.addWidget(self.eod_tabs)
 
             # plot EODs:
+            freqs = [props['EODf'] for props in self.eod_props]
+            inx = np.argsort(freqs)
             self.eod_plots = []
-            for k in range(len(self.eod_props)):
-                props = self.eod_props[k]
+            for i, k in enumerate(inx):
                 eod_plot = EODPlot(self.data, self.rate, self.mean_eods[k],
                                    self.spec_data[k], self.eod_props[k],
                                    self.phase_data[k], self.unit)
                 self.eod_plots.append(eod_plot)
                 self.navis.append(eod_plot.navi)
                 self.eod_tabs.addTab(eod_plot.canvas,
-                                     f'{k}: {self.eod_props[k]['EODf']:.1f}Hz')
+                                     f'{i}: {self.eod_props[k]['EODf']:.1f}Hz')
                 
         self.tools = self.setup_toolbar()
         close = QPushButton('&Close', self)

@@ -636,7 +636,7 @@ def wave_quality(props, harm_relampl=None, min_freq=0.0,
     # EOD frequency:
     if 'EODf' in props:
         eodf = props['EODf']
-        msg += ['EODf=%5.1fHz' % eodf]
+        msg += ['EODf=%6.1fHz' % eodf]
         if eodf < min_freq or eodf > max_freq:
             remove = True
             skip_reason += ['invalid EODf=%5.1fHz (minimumFrequency=%5.1fHz, maximumFrequency=%5.1f))' %
