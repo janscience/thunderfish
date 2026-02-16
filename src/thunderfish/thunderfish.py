@@ -49,9 +49,10 @@ from .bestwindow import analysis_window, plot_data_window
 from .checkpulse import check_pulse, add_check_pulse_config, check_pulse_args
 from .pulses import extract_pulsefish
 from .harmonics import add_psd_peak_detection_config, add_harmonic_groups_config
-from .harmonics import harmonic_groups, harmonic_groups_args, psd_peak_detection_args
+from .harmonics import harmonic_groups_args, psd_peak_detection_args
+from .harmonics import harmonic_groups, consistent
 from .harmonics import colors_markers, plot_harmonic_groups
-from .consistentfishes import consistent_fishes
+#from .consistentfishes import consistent_fishes
 from .fakefish import pulsefish_spectrum
 from .pulseanalysis import analyze_pulse, plot_pulse_eods, plot_pulse_spectrum
 from .waveanalysis import waveeod_waveform, analyze_wave, plot_wave_spectrum
@@ -276,8 +277,8 @@ def detect_eods(data, rate, power_freqs, powers, min_clip, max_clip,
                 else:
                     print('  none')
             wave_eodfs_list.append(wave_eodfs)
-        wave_eodfs = consistent_fishes(wave_eodfs_list,
-                                       df_th=cfg.value('frequencyThreshold'))
+        wave_eodfs = consistent(wave_eodfs_list,
+                                df_thresh=cfg.value('frequencyThreshold'))
         powers = np.mean(powers, 1)
         if verbose > 0:
             if len(wave_eodfs) > 0:

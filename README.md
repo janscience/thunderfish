@@ -89,7 +89,8 @@ Look into the modules for more information.
 
 - [`bestwindow`](https://bendalab.github.io/thunderfish/api/bestwindow.html): Select the region within a recording with the most stable signal of largest amplitude that is not clipped.
 - [`checkpulse`](https://bendalab.github.io/thunderfish/api/checkpulse.html): Check whether a pulse-type or a wave-type weakly electric fish is present in a recording.
-- [`consistentfishes`](https://bendalab.github.io/thunderfish/api/consistentfishes.html): Create a list of EOD frequencies with fishes present in all provided fish lists.
+- [`pulseanalysis`](https://bendalab.github.io/thunderfish/api/pulseanalysis.html): Analysis of pulse-type EOD waveforms.
+- [`waveanalysis`](https://bendalab.github.io/thunderfish/api/waveanalysis.html): Analysis of wave-type EOD waveforms.
 - [`eodanalysis`](https://bendalab.github.io/thunderfish/api/eodanalysis.html): Analyse EOD waveforms.
 - [`harmonics`](https://bendalab.github.io/thunderfish/api/harmonics.html): Extract and analyze harmonic frequencies from power spectra.
 - [`pulses`](https://bendalab.github.io/thunderfish/api/pulses.html): Extract and cluster EOD waverforms of pulse-type electric fish.

@@ -30,6 +30,7 @@ Extract and analyze harmonic frequencies from power spectra.
 - `add_relative_power()`: add a column with relative power.
 - `add_power_ranks()`: add a column with power ranks.
 - `similar_indices()`: indices of similar frequencies.
+- `consistent()`: harmonic groups whose fundamental frequencies consistently appear everywhere. 
 - `unique_mask()`: mark similar frequencies from different recordings as dublicate.
 - `unique()`: remove similar frequencies from different recordings.
 
@@ -42,6 +43,7 @@ Extract and analyze harmonic frequencies from power spectra.
                                 harmonic groups, and mains frequencies.
 - `annotate_harmonic_group()`: annotate peaks of a harmonic group in a spectrum.
 - `plot_unique_frequencies()`: plot all fundamental frequencies and mark unique frequencies.
+- `plot_selected_groups()`: plot all fundamental frequencies and mark selected frequencies with a bar.
 
 ## Configuration
 
@@ -1158,8 +1160,8 @@ def similar_indices(freqs, df_thresh, nextfs=0):
     Returns
     -------
     indices: (list of (list of ...)) list of list of two-tuples of int
-        For each frequency of each element in `freqs` a list of two tuples containing
-        the indices of elements and frequencies that are similar.
+        For each frequency of each element in `freqs` a list of two tuples
+        containing the indices of elements and frequencies that are similar.
     """
     if len(freqs) == 0:
         return []
@@ -1198,6 +1200,44 @@ def similar_indices(freqs, df_thresh, nextfs=0):
     return indices
 
 
+def consistent(group_list, df_thresh):
+    """Harmonic groups whose fundamental frequencies consistently appear everywhere. 
+
+    Parameters
+    ----------
+    group_list: list of list of 2-D arrays of float
+        Harmonic groups as returned by several calls to extract_fundamentals()
+        or harmonic_groups() with the element [0, 0] of the harmonic groups
+        being the fundamental frequency, and element[0, 1] the corresponding
+        power.
+    df_thresh: float
+        Fundamental frequencies closer than this threshold are considered
+        equal.
+
+    Returns
+    -------
+    consistent_groups: list of 2-D arrays of float
+        List of harmonic groups that consistently occur in all elements of
+        `group_list`. Each element has frequency of the harmonics in the
+        first column and corresponding power in the second column.
+    """
+    consistent_groups = []
+    freqs = fundamental_freqs_and_power(group_list)
+    indices = similar_indices(freqs, df_thresh, 0)
+    if len(indices) == 0:
+        return consistent_groups
+    for i in range(len(indices[0])):
+        # frequency appears everywhere:
+        if len(indices[0][i]) == len(freqs) - 1:
+            # find group with maximum power:
+            cgroup = group_list[0][i]
+            for j, k in indices[0][i]:
+                if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
+                    cgroup = group_list[j][k]
+            consistent_groups.append(cgroup)
+    return consistent_groups
+
+    
 def unique_mask(freqs, df_thresh, nextfs=0):
     """Mark similar frequencies from different recordings as dublicate.
 
@@ -1597,6 +1637,49 @@ def annotate_harmonic_group(ax, group, index=None, all_peaks=None,
     return artists
 
 
+def plot_selected_groups(ax, group_list, selected_groups, label=None,
+                         freq_style=dict(ls='none', marker='o',
+                                         color='k', ms=10),
+                         bar_style=dict(ls='-', color='c', lw=12)):
+    """
+    Plot all fundamental frequencies and mark selected frequencies with a bar.
+
+    Parameters
+    ----------
+    ax: matplotlib.Axes
+        Axes for plotting.
+    group_list: list of list of 2-D arrays of float
+        Harmonic groups as returned by several calls to extract_fundamentals()
+        or harmonic_groups() with the element [0, 0] of the harmonic groups
+        being the fundamental frequency, and element[0, 1] the corresponding
+        power.
+    selected_groups: list of 2-D arrays of float
+        Frequencies and power of selected harmonic groups from `group_list`.
+    label: str or None
+        Label for the selected groups that is added to the legend.
+    freq_style: dict
+        Plot style for marking fundamental frequencies of `group_list`.
+    bar_style: dict
+        Plot style for marking frequencies from `selected_groups`.
+    """
+    # mark selected frequencies:
+    for index in range(len(selected_groups)):
+        x = [0.75, len(group_list) + 0.25]
+        y = [selected_groups[index][0, 0]]*2
+        if index == 0 and label is not None:
+            ax.plot(x, y, label=label, **bar_style)
+        else:
+            ax.plot(x, y, **bar_style)
+    # mark all frequencies:
+    for index in range(len(group_list)):
+        for group in group_list[index]:
+            ax.plot(index + 1, group[0, 0], **freq_style)
+    ax.set_xlim([0.25, len(group_list) + 0.75])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+    ax.set_ylabel('frequency [Hz]')
+    ax.set_xlabel('group index')
+
+
 def plot_unique_frequencies(ax, freqs_list, unique_freqs,
                             freq_style=dict(ls='none', marker='o',
                                             color='k', ms=10),
@@ -1624,7 +1707,8 @@ def plot_unique_frequencies(ax, freqs_list, unique_freqs,
     for index in range(len(freqs_list)):
         freqs = freqs_list[index][:, 0]
         for freq in freqs:
-            if np.min(np.abs(unique_freqs[index][:, 0] - freq)) < 1e-8:
+            if len(unique_freqs[index][:, 0]) > 0 and \
+               np.min(np.abs(unique_freqs[index][:, 0] - freq)) < 1e-8:
                 ax.plot(index + 1, freq, **unique_style)
         ax.plot(np.ones(len(freqs)) + index, freqs, **freq_style)
     ax.set_xlim([0.25, len(freqs_list) + 0.75])
@@ -1746,13 +1830,16 @@ def main(data_file=None):
     from thunderlab.powerspectrum import psd
     from .fakefish import wavefish_eods
 
+    def mkg(f, p, n=5):
+        return np.array([(h*f, p/h) for h in range(1, n)])
+
     if data_file is None:
         # generate data:
         title = 'simulation'
         rate = 44100.0
         d = 20.0
         noise = 0.01
-        eodfs = [123.0, 333.0, 666.0, 666.5]
+        eodfs = [123.0, 333.0, 666.0, 666.5, 792.8]
         fish1 = 0.5*wavefish_eods('Eigenmannia', eodfs[0], rate,
                                   duration=d, noise_std=noise)
         fish2 = 1.0*wavefish_eods('Eigenmannia', eodfs[1], rate,
@@ -1761,38 +1848,69 @@ def main(data_file=None):
                                    duration=d, noise_std=noise)
         fish4 = 6.0*wavefish_eods('Alepto', eodfs[3], rate,
                                   duration=d, noise_std=noise)
-        data = fish1 + fish2 + fish3 + fish4
+        fish5 = 2.7*wavefish_eods('Alepto', eodfs[4], rate,
+                                  duration=d, noise_std=noise)
+        data = fish1 + fish2 + fish3 + fish4 + fish5
     else:
         from thunderlab.dataloader import load_data
         print(f"load {data_file} ...")
         data, rate, unit, amax = load_data(data_file)
-        data = data[:,0]
+        data = data[:, 0]
         title = data_file
 
     # retrieve fundamentals from power spectrum:
     psd_data = psd(data, rate, freq_resolution=0.1)
     groups, _, mains, all_freqs, good_freqs, _, _, _ = harmonic_groups(psd_data[0], psd_data[1], check_freqs=[123.0, 666.0], max_db_diff=30.0, verbose=0)
+    fundamentals = fundamental_freqs(groups)
+    np.set_printoptions(formatter={'float': lambda x: f'{x:5.1f}'})
+    print('fundamental frequencies extracted from power spectrum:')
+    print(fundamentals)
     fig, ax = plt.subplots()
     plot_psd_harmonic_groups(ax, psd_data[0], psd_data[1], groups, mains,
                              all_freqs, good_freqs, max_freq=3000.0)
     annotate_harmonic_group(ax, groups[1])
     ax.set_title(title)
     plt.show()
+    print()
+
+    # add groups:
+    group_list = [groups]
+    group_list.append([mkg(44.0, 2.0), mkg(123.4, 17.2), mkg(320.5, 294.3), mkg(665.5, 486.1), mkg(666.2, 782.3), mkg(793.1, 74.9)])
+    group_list.append([mkg(123.3, 163.8), mkg(320.2, 82.5), mkg(666.1, 184.9), mkg(668.4, 205.1)])
+    group_list.append([mkg(123.1, 44.5), mkg(666.1, 86.4)])
+    fundamentals = fundamental_freqs(group_list)
+    print('fundamental frequencies of group_list:')
+    print('\n'.join((str(f) for f in fundamentals)))
+    print()
+
+    # consistent groups:
+    cgroups = consistent(group_list, 1.0)
+    print('fundamental frequencies of consistent groups:')
+    print(fundamental_freqs(cgroups))
+    print()
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, layout='constrained', sharey=True)
+    ax1.set_title('consistent groups')
+    plot_selected_groups(ax1, group_list, cgroups)
+
+    # check almost empty group_list:
+    group2_list = [[], group_list[1], []]
+    cgroups = consistent(group2_list, 1.0)
+    ax2.set_title('consistent in mostly empty group list')
+    plot_selected_groups(ax2, group2_list, cgroups)
+
+    # check single fishlist:
+    group3_list = [group_list[1]]
+    cgroups = consistent(group3_list, 1.0)
+    ax3.set_title('consistent in single group list')
+    plot_selected_groups(ax3, group3_list, cgroups)
+    plt.show()
     
     # unify fundamental frequencies:
-    fundamentals = fundamental_freqs(groups)
-    np.set_printoptions(formatter={'float': lambda x: f'{x:5.1f}'})
-    print('fundamental frequencies extracted from power spectrum:')
-    print(fundamentals)
-    print()
-    freqs = fundamental_freqs_and_power([groups])
-    freqs.append(np.array([[44.0, -20.0], [44.2, -10.0], [320.5, 2.5], [665.5, 5.0], [666.2, 10.0]]))
-    freqs.append(np.array([[123.3, 1.0], [320.2, -2.0], [668.4, 2.0]]))
+    freqs = fundamental_freqs_and_power(group_list)
     rank_freqs = add_relative_power(freqs)
     freqs = add_power_ranks(rank_freqs)
     print('all frequencies (frequency, power, relpower, rank):')
     print('\n'.join((str(f) for f in freqs)))
-    print(freqs)
     print()
     indices = similar_indices(freqs, 1.0)
     print('similar indices:')
@@ -1806,18 +1924,21 @@ def main(data_file=None):
     print('unique power:')
     print('\n'.join((str(f) for f in unique_freqs)))
     print()
+    
     unique_freqs = unique(freqs, 1.0, 'relpower')
     axs[0, 1].set_title('unique relative power')
     plot_unique_frequencies(axs[0, 1], freqs, unique_freqs)
     print('unique relative power:')
     print('\n'.join((str(f) for f in unique_freqs)))
     print()
+    
     unique_freqs = unique(freqs, 1.0, 'rank')
     axs[1, 0].set_title('unique rank')
     plot_unique_frequencies(axs[1, 0], freqs, unique_freqs)
     print('unique rank:')
     print('\n'.join((str(f) for f in unique_freqs)))
     print()
+    
     unique_freqs = unique(freqs, 1.0, 'rank', 1)
     axs[1, 1].set_title('unique rank for next neighbor')
     plot_unique_frequencies(axs[1, 1], freqs, unique_freqs)

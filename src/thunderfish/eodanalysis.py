@@ -1,5 +1,5 @@
 """
-Analysis of EOD waveforms.
+Analyse EOD waveforms.
 
 ## EOD waveform analysis
 
