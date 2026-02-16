@@ -41,6 +41,7 @@ Extract and analyze harmonic frequencies from power spectra.
 - `plot_psd_harmonic_groups()`: Plot decibel power-spectrum with detected peaks,
                                 harmonic groups, and mains frequencies.
 - `annotate_harmonic_group()`: annotate peaks of a harmonic group in a spectrum.
+- `plot_unique_frequencies()`: plot all fundamental frequencies and mark unique frequencies.
 
 ## Configuration
 
@@ -58,6 +59,7 @@ import math as m
 import numpy as np
 import scipy.signal as sig
 try:
+    import matplotlib.pyplot as plt
     import matplotlib.cm as cm
     import matplotlib.colors as mc
 except ImportError:
@@ -1594,6 +1596,42 @@ def annotate_harmonic_group(ax, group, index=None, all_peaks=None,
         artists.append(a)
     return artists
 
+
+def plot_unique_frequencies(ax, freqs_list, unique_freqs,
+                            freq_style=dict(ls='none', marker='o',
+                                            color='k', ms=10),
+                            unique_style=dict(ls='none', marker='o',
+                                              color='r', ms=16)):
+    """
+    Plot all fundamental frequencies and mark unique frequencies.
+
+    Parameters
+    ----------
+    ax: matplotlib.Axes
+        Axes for plotting.
+    freqs_list: list of 2-D arrays of float
+        Harmonic groups as returned by severla calls to extract_fundamentals()
+        or harmonic_groups() with the element [0, 0] of the harmonic groups
+        being the fundamental frequency, and element[0, 1] the corresponding
+        power.
+    unique_freqs: list of 2-D arrays of float
+        Frequencies and power of unique harmonic groups from `freqs_list`.
+    freq_style: dict
+        Plot style for marking fundamental frequencies of `freqs_list`.
+    unique_style: dict
+        Plot style for marking frequencies from `unique_freqs`.
+    """
+    for index in range(len(freqs_list)):
+        freqs = freqs_list[index][:, 0]
+        for freq in freqs:
+            if np.min(np.abs(unique_freqs[index][:, 0] - freq)) < 1e-8:
+                ax.plot(index + 1, freq, **unique_style)
+        ax.plot(np.ones(len(freqs)) + index, freqs, **freq_style)
+    ax.set_xlim([0.25, len(freqs_list) + 0.75])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+    ax.set_ylabel('frequency [Hz]')
+    ax.set_xlabel('group index')
+
         
 def add_psd_peak_detection_config(cfg, low_threshold=0.0, high_threshold=0.0,
                                   thresh_bins=100,
@@ -1737,6 +1775,7 @@ def main(data_file=None):
     fig, ax = plt.subplots()
     plot_psd_harmonic_groups(ax, psd_data[0], psd_data[1], groups, mains,
                              all_freqs, good_freqs, max_freq=3000.0)
+    annotate_harmonic_group(ax, groups[1])
     ax.set_title(title)
     plt.show()
     
@@ -1745,35 +1784,47 @@ def main(data_file=None):
     np.set_printoptions(formatter={'float': lambda x: f'{x:5.1f}'})
     print('fundamental frequencies extracted from power spectrum:')
     print(fundamentals)
-    print('')
+    print()
     freqs = fundamental_freqs_and_power([groups])
     freqs.append(np.array([[44.0, -20.0], [44.2, -10.0], [320.5, 2.5], [665.5, 5.0], [666.2, 10.0]]))
     freqs.append(np.array([[123.3, 1.0], [320.2, -2.0], [668.4, 2.0]]))
     rank_freqs = add_relative_power(freqs)
-    rank_freqs = add_power_ranks(rank_freqs)
+    freqs = add_power_ranks(rank_freqs)
     print('all frequencies (frequency, power, relpower, rank):')
-    print('\n'.join(( str(f) for f in rank_freqs)))
-    print('')
+    print('\n'.join((str(f) for f in freqs)))
+    print(freqs)
+    print()
     indices = similar_indices(freqs, 1.0)
     print('similar indices:')
-    print('\n'.join(( ('\n  '.join((str(f) for f in g)) for g in indices))))
-    print('')
+    print('\n'.join((('\n  '.join((str(f) for f in g)) for g in indices))))
+    print()
+
+    fig, axs = plt.subplots(2, 2, layout='constrained')
     unique_freqs = unique(freqs, 1.0, 'power')
+    axs[0, 0].set_title('unique power')
+    plot_unique_frequencies(axs[0, 0], freqs, unique_freqs)
     print('unique power:')
-    print('\n'.join(( str(f) for f in unique_freqs)))
-    print('')
+    print('\n'.join((str(f) for f in unique_freqs)))
+    print()
     unique_freqs = unique(freqs, 1.0, 'relpower')
+    axs[0, 1].set_title('unique relative power')
+    plot_unique_frequencies(axs[0, 1], freqs, unique_freqs)
     print('unique relative power:')
-    print('\n'.join(( str(f) for f in unique_freqs)))
-    print('')
+    print('\n'.join((str(f) for f in unique_freqs)))
+    print()
     unique_freqs = unique(freqs, 1.0, 'rank')
+    axs[1, 0].set_title('unique rank')
+    plot_unique_frequencies(axs[1, 0], freqs, unique_freqs)
     print('unique rank:')
-    print('\n'.join(( str(f) for f in unique_freqs)))
-    print('')
+    print('\n'.join((str(f) for f in unique_freqs)))
+    print()
     unique_freqs = unique(freqs, 1.0, 'rank', 1)
+    axs[1, 1].set_title('unique rank for next neighbor')
+    plot_unique_frequencies(axs[1, 1], freqs, unique_freqs)
     print('unique rank for next neighour only:')
-    print('\n'.join(( str(f) for f in unique_freqs)))
-    print('')
+    print('\n'.join((str(f) for f in unique_freqs)))
+    print()
+    plt.show()
 
     
 if __name__ == "__main__":

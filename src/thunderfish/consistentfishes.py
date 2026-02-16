@@ -3,7 +3,7 @@ Compare fishlists created by the harmonics module in order to create a fishlist 
 fishes present in all fishlists.
 
 - `consistent_fishes()`: Compares a list of fishlists and builds a consistent fishlist.
-- `plot_selected_frequencies()`: plot all fundamental frequencies and mark selected frequencies with a bar.
+- `plot_selected_groups()`: plot all fundamental frequencies and mark selected frequencies with a bar.
 """
 
 import numpy as np
@@ -97,10 +97,10 @@ def consistent_fishes(fishlists, df_th=1):
     return filtered_fishlist
 
 
-def plot_selected_frequencies(ax, group_list, selected_groups, label=None,
-                              freq_style=dict(ls='none', marker='o',
-                                              color='k', ms=10),
-                              bar_style=dict(ls='-', color='c', lw=12)):
+def plot_selected_groups(ax, group_list, selected_groups, label=None,
+                         freq_style=dict(ls='none', marker='o',
+                                         color='k', ms=10),
+                         bar_style=dict(ls='-', color='c', lw=12)):
     """
     Plot all fundamental frequencies and mark selected frequencies with a bar.
 
@@ -116,11 +116,11 @@ def plot_selected_frequencies(ax, group_list, selected_groups, label=None,
     selected_groups: list of 2-D arrays of float
         Frequencies and power of selected harmonic groups from `group_list`.
     label: str or None
-        Plot label for the selected groups that is added to the legend.
+        Label for the selected groups that is added to the legend.
     freq_style: dict
         Plot style for marking fundamental frequencies of `group_list`.
     bar_style: dict
-        Plot style for marking frequencies from `selected_groupss`.
+        Plot style for marking frequencies from `selected_groups`.
     """
     # mark selected frequencies:
     for index in range(len(selected_groups)):
@@ -155,19 +155,19 @@ if __name__ == '__main__':
                   [mkg(349.8), mkg(700.4), mkg(960.3)]]
     selected_groups = consistent_fishes(group_list)
     ax1.set_title('consistent groups')
-    plot_selected_frequencies(ax1, group_list, selected_groups)
+    plot_selected_groups(ax1, group_list, selected_groups)
 
     # check almost empty fishlist:
     group_list = [[], [mkg(523.7)], [mkg(523.4)], []]
     selected_groups = consistent_fishes(group_list)
     ax2.set_title('consistent in mostly empty group list')
-    plot_selected_frequencies(ax2, group_list, selected_groups)
+    plot_selected_groups(ax2, group_list, selected_groups)
 
     # check single fishlist:
     group_list = [[mkg(523.7)]]
     selected_groups = consistent_fishes(group_list)
     ax3.set_title('consistent in single group list')
-    plot_selected_frequencies(ax3, group_list, selected_groups)
+    plot_selected_groups(ax3, group_list, selected_groups)
 
     ## TODO: move to tests/ !
     # check empty fishlist:
