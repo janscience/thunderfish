@@ -30,6 +30,7 @@ Extract and analyze harmonic frequencies from power spectra.
 - `add_relative_power()`: add a column with relative power.
 - `add_power_ranks()`: add a column with power ranks.
 - `similar_indices()`: indices of similar frequencies.
+- `unique_indices()`: for each unique fundamental frequency a list of indices indicating where it is found. 
 - `consistent()`: harmonic groups whose fundamental frequencies consistently appear everywhere. 
 - `unique_mask()`: mark similar frequencies from different recordings as dublicate.
 - `unique()`: remove similar frequencies from different recordings.
@@ -1166,38 +1167,74 @@ def similar_indices(freqs, df_thresh, nextfs=0):
     if len(freqs) == 0:
         return []
     
-    # check whether freqs is list of fundamental frequencies and powers:
-    list_of_freq_power = True
+    # check whether freqs is array of fundamental frequencies:
+    array_of_freqs = True
     for group in freqs:
-        if not (hasattr(group, 'shape') and len(group.shape) == 2):
-            list_of_freq_power = False
+        if not (hasattr(group, 'shape') and 1 <= len(group.shape) <= 2):
+            array_of_freqs = False
             break
 
-    if list_of_freq_power:
+    if array_of_freqs:
         indices = [ [[] for j in range(len(freqs[i]))] for i in range(len(freqs))]
-        for j in range(len(freqs)-1):
-            freqsj = np.asarray(freqs[j])
+        for j in range(len(freqs) - 1):
+            freqsj = freqs[j]
+            nn = len(freqs) if nextfs == 0 else j + nextfs + 1
+            if nn > len(freqs):
+                nn = len(freqs)
             for m in range(len(freqsj)):
                 freq1 = freqsj[m]
-                nn = len(freqs) if nextfs == 0 else j+1+nextfs
-                if nn > len(freqs):
-                    nn = len(freqs)
-                for k in range(j+1, nn):
-                    freqsk = np.asarray(freqs[k])
+                for k in range(j + 1, nn):
+                    freqsk = freqs[k]
                     if len(freqsk) == 0:
                         continue
-                    n = np.argmin(np.abs(freqsk[:,0] - freq1[0]))
+                    n = np.argmin(np.abs(freqsk[:, 0] - freq1[0]))
                     freq2 = freqsk[n]
-                    if np.argmin(np.abs(freqsj[:,0] - freq2[0])) != m:
+                    if np.argmin(np.abs(freqsj[:, 0] - freq2[0])) != m:
                         continue
                     if np.abs(freq1[0] - freq2[0]) < df_thresh:
-                        indices[k][n].append((j, m))
                         indices[j][m].append((k, n))
+                        indices[k][n].append((j, m))
     else:
         indices = []
         for groups in freqs:
             indices.append(similar_indices(groups, df_thresh, nextfs))
     return indices
+
+
+def unique_indices(freqs, df_thresh, nextfs=0):
+    """For each unique fundamental frequency a list of indices indicating where it is found. 
+
+    Parameters
+    ----------
+    freqs: list of 1-D or 2-D arrays
+        First column in the inner arrays is fundamental frequency.
+    df_thresh: float
+        Fundamental frequencies closer than this threshold are considered
+        equal.
+    nextfs: int
+        If zero, compare all elements in `freqs` with each other. Otherwise,
+        only compare with the `nextfs` next elements in `freqs`.
+
+    Returns
+    -------
+    freq_indices: list of list of 2-tuple of int
+        For each unique frequency in `freqs`, a list of two-tuples of indices
+        into `freqs`, indicating where in `freqs` these frequencies are.
+    """
+    freq_indices = []
+    indices = similar_indices(freqs, df_thresh, 0)
+    if len(indices) == 0:
+        return freq_indices
+    for j in range(len(indices)):
+        for m in range(len(indices[j])):
+            if indices[j][m] is not None:
+                # store:
+                freq_indices.append([(j, m)])
+                freq_indices[-1].extend(indices[j][m])
+                # remove from indices:
+                for inx in indices[j][m]:
+                    indices[inx[0]][inx[1]] = None
+    return freq_indices
 
 
 def consistent(group_list, df_thresh):
@@ -1334,14 +1371,14 @@ def unique(freqs, df_thresh, mode='power', nextfs=0):
     if len(freqs) == 0:
         return []
     
-    # check whether freqs is list of fundamental frequencies and powers:
-    list_of_freq_power = True
+    # check whether freqs is array of fundamental frequencies and powers:
+    array_of_freq_power = True
     for group in freqs:
         if not (hasattr(group, 'shape') and len(group.shape) == 2):
-            list_of_freq_power = False
+            array_of_freq_power = False
             break
 
-    if list_of_freq_power:
+    if array_of_freq_power:
         if mode == 'power':
             mask = unique_mask(freqs, df_thresh, nextfs)
         elif mode == 'relpower':
@@ -1882,6 +1919,28 @@ def main(data_file=None):
     print('fundamental frequencies of group_list:')
     print('\n'.join((str(f) for f in fundamentals)))
     print()
+    
+    # unify fundamental frequencies:
+    freqs = fundamental_freqs_and_power(group_list)
+    rank_freqs = add_relative_power(freqs)
+    freqs = add_power_ranks(rank_freqs)
+    print('all frequencies (frequency, power, relpower, rank):')
+    print('\n'.join((str(f) for f in freqs)))
+    print()
+    indices = similar_indices(freqs, 1.0)
+    print('similar indices:')
+    for i in range(len(indices)):
+        for inx in indices[i]:
+            if len(inx) > 0:
+                print(f'{i} {freqs[inx[0][0]][inx[0][1]][0]:6.1f}Hz:', inx)
+            else:
+                print(f'{i}         :', inx)
+    print()
+    indices = unique_indices(freqs, 1.0)
+    print('unique indices:')
+    for inx in indices:
+        print(f'{freqs[inx[0][0]][inx[0][1]][0]:6.1f}Hz:', inx)
+    print()
 
     # consistent groups:
     cgroups = consistent(group_list, 1.0)
@@ -1898,24 +1957,12 @@ def main(data_file=None):
     ax2.set_title('consistent in mostly empty group list')
     plot_selected_groups(ax2, group2_list, cgroups)
 
-    # check single fishlist:
+    # check single group_list:
     group3_list = [group_list[1]]
     cgroups = consistent(group3_list, 1.0)
     ax3.set_title('consistent in single group list')
     plot_selected_groups(ax3, group3_list, cgroups)
     plt.show()
-    
-    # unify fundamental frequencies:
-    freqs = fundamental_freqs_and_power(group_list)
-    rank_freqs = add_relative_power(freqs)
-    freqs = add_power_ranks(rank_freqs)
-    print('all frequencies (frequency, power, relpower, rank):')
-    print('\n'.join((str(f) for f in freqs)))
-    print()
-    indices = similar_indices(freqs, 1.0)
-    print('similar indices:')
-    print('\n'.join((('\n  '.join((str(f) for f in g)) for g in indices))))
-    print()
 
     fig, axs = plt.subplots(2, 2, layout='constrained')
     unique_freqs = unique(freqs, 1.0, 'power')
