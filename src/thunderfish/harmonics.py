@@ -1149,8 +1149,8 @@ def similar_indices(freqs, df_thresh, nextfs=0):
 
     Parameters
     ----------
-    freqs: (list of (list of ...)) list of 2-D arrays
-        First column in the arrays is fundamental frequency.
+    freqs: (list of (list of ...)) list of 1-D or 2-D arrays
+        First column in the inner arrays is fundamental frequency.
     df_thresh: float
         Fundamental frequencies closer than this threshold are considered
         equal.
@@ -1260,15 +1260,13 @@ def consistent(group_list, df_thresh):
     """
     consistent_groups = []
     freqs = fundamental_freqs_and_power(group_list)
-    indices = similar_indices(freqs, df_thresh, 0)
-    if len(indices) == 0:
-        return consistent_groups
-    for i in range(len(indices[0])):
+    indices = unique_indices(freqs, df_thresh, 0)
+    for idx in indices:
         # frequency appears everywhere:
-        if len(indices[0][i]) == len(freqs) - 1:
+        if len(idx) == len(freqs):
             # find group with maximum power:
-            cgroup = group_list[0][i]
-            for j, k in indices[0][i]:
+            cgroup = group_list[idx[0][0]][idx[0][1]]
+            for j, k in idx[1:]:
                 if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
                     cgroup = group_list[j][k]
             consistent_groups.append(cgroup)
