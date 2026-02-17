@@ -23,7 +23,7 @@ Extract and analyze harmonic frequencies from power spectra.
 - `fundamental_freqs()`: extract fundamental frequencies from
                          lists of harmonic groups.
 - `fundamental_freqs_and_power()`: extract fundamental frequencies and their
-                                   power in dB from lists of harmonic groups.
+                                   power in decibel from lists of harmonic groups.
 
 ## Handling of lists of fundamental frequencies
 
@@ -32,6 +32,7 @@ Extract and analyze harmonic frequencies from power spectra.
 - `similar_indices()`: indices of similar frequencies.
 - `unique_indices()`: for each unique fundamental frequency a list of indices indicating where it is found. 
 - `consistent()`: harmonic groups whose fundamental frequencies consistently appear everywhere. 
+- `closest()`: harmonic groups whose fundamental frequencies are closest to each other. 
 - `unique_mask()`: mark similar frequencies from different recordings as dublicate.
 - `unique()`: remove similar frequencies from different recordings.
 
@@ -1034,7 +1035,7 @@ def fundamental_freqs(group_list):
 
 def fundamental_freqs_and_power(group_list, power=False,
                                 ref_power=1.0, min_power=1e-20):
-    """Extract fundamental frequencies and their power in dB from lists
+    """Extract fundamental frequencies and their power in decibel from lists
     of harmonic groups.
 
     The inner list of 2-D arrays of the input argument is transformed
@@ -1077,7 +1078,7 @@ def fundamental_freqs_and_power(group_list, power=False,
         
     if list_of_groups:
         fundamentals = np.array([[group[0, 0], np.sum(group[:, 1])]
-                            for group in group_list if len(group) > 0])
+                                 for group in group_list if len(group) > 0])
         if not power:
             fundamentals[:, 1] = decibel(fundamentals[:, 1],
                                          ref_power, min_power)
@@ -1152,8 +1153,8 @@ def similar_indices(freqs, df_thresh, nextfs=0):
     freqs: (list of (list of ...)) list of 1-D or 2-D arrays
         First column in the inner arrays is fundamental frequency.
     df_thresh: float
-        Fundamental frequencies closer than this threshold are considered
-        equal.
+        Fundamental frequencies reciprocally being the closest to each other
+        and closer than this threshold are considered equal.
     nextfs: int
         If zero, compare all elements in freqs with each other. Otherwise,
         only compare with the `nextfs` next elements in freqs.
@@ -1167,14 +1168,14 @@ def similar_indices(freqs, df_thresh, nextfs=0):
     if len(freqs) == 0:
         return []
     
-    # check whether freqs is array of fundamental frequencies:
-    array_of_freqs = True
+    # check whether freqs is list of array of fundamental frequencies:
+    list_of_freqs = True
     for group in freqs:
         if not (hasattr(group, 'shape') and 1 <= len(group.shape) <= 2):
-            array_of_freqs = False
+            list_of_freqs = False
             break
 
-    if array_of_freqs:
+    if list_of_freqs:
         indices = [ [[] for j in range(len(freqs[i]))] for i in range(len(freqs))]
         for j in range(len(freqs) - 1):
             freqsj = freqs[j]
@@ -1206,34 +1207,49 @@ def unique_indices(freqs, df_thresh, nextfs=0):
 
     Parameters
     ----------
-    freqs: list of 1-D or 2-D arrays
+    freqs: (list of (list of ...)) list of 1-D or 2-D arrays
         First column in the inner arrays is fundamental frequency.
     df_thresh: float
-        Fundamental frequencies closer than this threshold are considered
-        equal.
+        Fundamental frequencies reciprocally being the closest to each other
+        and closer than this threshold are considered equal.
     nextfs: int
         If zero, compare all elements in `freqs` with each other. Otherwise,
         only compare with the `nextfs` next elements in `freqs`.
 
     Returns
     -------
-    freq_indices: list of list of 2-tuple of int
+    freq_indices: (list of (list of ...)) list of list of 2-tuple of int
         For each unique frequency in `freqs`, a list of two-tuples of indices
         into `freqs`, indicating where in `freqs` these frequencies are.
     """
-    freq_indices = []
-    indices = similar_indices(freqs, df_thresh, 0)
-    if len(indices) == 0:
-        return freq_indices
-    for j in range(len(indices)):
-        for m in range(len(indices[j])):
-            if indices[j][m] is not None:
-                # store:
-                freq_indices.append([(j, m)])
-                freq_indices[-1].extend(indices[j][m])
-                # remove from indices:
-                for inx in indices[j][m]:
-                    indices[inx[0]][inx[1]] = None
+    if len(freqs) == 0:
+        return []
+    
+    # check whether freqs is list of array of fundamental frequencies:
+    list_of_freqs = True
+    for group in freqs:
+        if not (hasattr(group, 'shape') and 1 <= len(group.shape) <= 2):
+            list_of_freqs = False
+            break
+
+    if list_of_freqs:
+        freq_indices = []
+        indices = similar_indices(freqs, df_thresh, 0)
+        if len(indices) == 0:
+            return freq_indices
+        for j in range(len(indices)):
+            for m in range(len(indices[j])):
+                if indices[j][m] is not None:
+                    # store:
+                    freq_indices.append([(j, m)])
+                    freq_indices[-1].extend(indices[j][m])
+                    # remove from indices:
+                    for inx in indices[j][m]:
+                        indices[inx[0]][inx[1]] = None
+    else:
+        indices = []
+        for groups in freqs:
+            indices.append(unique_indices(groups, df_thresh, nextfs))
     return freq_indices
 
 
@@ -1242,35 +1258,145 @@ def consistent(group_list, df_thresh):
 
     Parameters
     ----------
-    group_list: list of list of 2-D arrays of float
+    group_list: (list of (list of ...)) list of list of 2-D arrays of float
         Harmonic groups as returned by several calls to extract_fundamentals()
         or harmonic_groups() with the element [0, 0] of the harmonic groups
         being the fundamental frequency, and element[0, 1] the corresponding
         power.
     df_thresh: float
-        Fundamental frequencies closer than this threshold are considered
-        equal.
+        Fundamental frequencies reciprocally being the closest to each other
+        and closer than this threshold are considered equal.
 
     Returns
     -------
-    consistent_groups: list of 2-D arrays of float
+    consistent_groups: (list of (list of ...)) list of 2-D arrays of float
         List of harmonic groups that consistently occur in all elements of
         `group_list`. Each element has frequency of the harmonics in the
         first column and corresponding power in the second column.
     """
-    consistent_groups = []
-    freqs = fundamental_freqs_and_power(group_list)
-    indices = unique_indices(freqs, df_thresh, 0)
-    for idx in indices:
-        # frequency appears everywhere:
-        if len(idx) == len(freqs):
-            # find group with maximum power:
-            cgroup = group_list[idx[0][0]][idx[0][1]]
-            for j, k in idx[1:]:
-                if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
-                    cgroup = group_list[j][k]
-            consistent_groups.append(cgroup)
+    if len(group_list) == 0:
+        return []
+    
+    # check whether group_list is list of harmonic groups:
+    list_of_groups = True
+    for groups in group_list:
+        for group in groups:
+            if not ( hasattr(group, 'shape') and len(group.shape) == 2 ):
+                list_of_groups = False
+                break
+        if not list_of_groups:
+            break
+        
+    if list_of_groups:
+        consistent_groups = []
+        freqs = fundamental_freqs_and_power(group_list)
+        indices = unique_indices(freqs, df_thresh, 0)
+        for idx in indices:
+            # frequency appears everywhere:
+            if len(idx) == len(freqs):
+                # find group with maximum power:
+                cgroup = group_list[idx[0][0]][idx[0][1]]
+                for j, k in idx[1:]:
+                    if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
+                        cgroup = group_list[j][k]
+                consistent_groups.append(cgroup)
+    else:
+        consistent_groups = []
+        for groups in group_list:
+            consistent_groups.append(consistent(groups, df_thresh))
     return consistent_groups
+
+
+def closest(group_list, df_thresh, max_closest=2, min_closest=1):
+    """Harmonic groups whose fundamental frequencies are closest to each other. 
+
+    Parameters
+    ----------
+    group_list: (list of (list of ...)) list of list of 2-D arrays of float
+        Harmonic groups as returned by several calls to extract_fundamentals()
+        or harmonic_groups() with the element [0, 0] of the harmonic groups
+        being the fundamental frequency, and element[0, 1] the corresponding
+        power.
+    df_thresh: float
+        Fundamental frequencies reciprocally being the closest to each other
+        and closer than this threshold are considered equal.
+    max_closest: int
+        Try to return at maximum that many harmonic groups whose fundamental
+        frequencies are closest to each other.
+    min_closest: int
+        Only return harmonic groups that have at minimum that many
+        harmonic groups whose fundamental frequencies are closest to
+        each other.
+
+    Returns
+    -------
+    closest_groups: (list of (list of ...)) list of list of 2-D arrays of float
+        For each unique fundamental frequency in `group_list` a list
+        of harmonic groups whose fundamental frequencies are closest
+        to each other. Each element has frequency of the harmonics in
+        the first column and corresponding power in the second column.
+    closest_indices: (list of (list of ...)) list of two-tuple of int
+        For each unique fundamental frequency in `group_list` the first and last
+        index into `group_list` where the closest frequencies have been found.
+
+    """
+    if len(group_list) == 0:
+        return [], []
+    
+    # check whether group_list is list of harmonic groups:
+    list_of_groups = True
+    for groups in group_list:
+        for group in groups:
+            if not ( hasattr(group, 'shape') and len(group.shape) == 2 ):
+                list_of_groups = False
+                break
+        if not list_of_groups:
+            break
+        
+    if list_of_groups:
+        if min_closest is None:
+            min_closest = max_closest
+        closest_groups = []
+        closest_indices = []
+        freqs = fundamental_freqs_and_power(group_list)
+        freq_indices = unique_indices(freqs, df_thresh, 0)
+        for fidx in freq_indices:
+            if len(fidx) < 2:
+                # keep min_closest occurances:
+                if len(fidx) >= min_closest:
+                    closest_groups.append([group_list[j][k] for j, k in fidx])
+                    closest_indices.append((fidx[0][0], fidx[-1][0]))
+                continue
+            # find minimum difference in fundamental frequencies:
+            fp = np.array([freqs[j][k] for j, k in fidx])
+            dfs = np.diff(fp)
+            i0 = np.argmin(dfs)
+            i1 = i0 + 1
+            # expand to n_closest:
+            for k in range(1, max_closest):
+                if i0 > 0 and i1 < len(dfs):
+                    if dfs[i0 - 1] <= dfs[i1]:
+                        i0 -= 1
+                    else:
+                        i1 += 1
+                elif i0 > 0:
+                    i0 -= 1
+                elif i1 < len(dfs):
+                    i1 += 1
+                else:
+                    break
+            if i1 - i0 >= min_closest:
+                closest_groups.append([group_list[j][k]
+                                       for j, k in fidx[i0:i1]])
+                closest_indices.append((fidx[i0][0], fidx[i1 - 1][0]))
+    else:
+        closest_groups = []
+        closest_indices = []
+        for groups in group_list:
+            cg, ci = closest(groups, df_thresh, max_closest, min_closest)
+            closest_groups.append(cg)
+            closest_indices.append(ci)
+    return closest_groups, closest_indices
 
     
 def unique_mask(freqs, df_thresh, nextfs=0):
@@ -1370,13 +1496,13 @@ def unique(freqs, df_thresh, mode='power', nextfs=0):
         return []
     
     # check whether freqs is array of fundamental frequencies and powers:
-    array_of_freq_power = True
+    list_of_freq_power = True
     for group in freqs:
         if not (hasattr(group, 'shape') and len(group.shape) == 2):
-            array_of_freq_power = False
+            list_of_freq_power = False
             break
 
-    if array_of_freq_power:
+    if list_of_freq_power:
         if mode == 'power':
             mask = unique_mask(freqs, df_thresh, nextfs)
         elif mode == 'relpower':
@@ -1672,7 +1798,8 @@ def annotate_harmonic_group(ax, group, index=None, all_peaks=None,
     return artists
 
 
-def plot_selected_groups(ax, group_list, selected_groups, label=None,
+def plot_selected_groups(ax, group_list, selected_groups, indices=None,
+                         label=None,
                          freq_style=dict(ls='none', marker='o',
                                          color='k', ms=10),
                          bar_style=dict(ls='-', color='c', lw=12)):
@@ -1690,6 +1817,8 @@ def plot_selected_groups(ax, group_list, selected_groups, label=None,
         power.
     selected_groups: list of 2-D arrays of float
         Frequencies and power of selected harmonic groups from `group_list`.
+    indices: None or list of two-tuple of int
+        Ranges of the selected groups.
     label: str or None
         Label for the selected groups that is added to the legend.
     freq_style: dict
@@ -1698,13 +1827,23 @@ def plot_selected_groups(ax, group_list, selected_groups, label=None,
         Plot style for marking frequencies from `selected_groups`.
     """
     # mark selected frequencies:
-    for index in range(len(selected_groups)):
-        x = [0.75, len(group_list) + 0.25]
-        y = [selected_groups[index][0, 0]]*2
-        if index == 0 and label is not None:
-            ax.plot(x, y, label=label, **bar_style)
-        else:
-            ax.plot(x, y, **bar_style)
+    if indices is None:
+        for index in range(len(selected_groups)):
+            x = [0.75, len(group_list) + 0.25]
+            y = [selected_groups[index][0, 0]]*2
+            if index == 0 and label is not None:
+                ax.plot(x, y, label=label, **bar_style)
+            else:
+                ax.plot(x, y, **bar_style)
+    else:
+        for index in range(len(selected_groups)):
+            x = [indices[index][0] + 0.75,
+                 indices[index][1] + 1.25]
+            y = [selected_groups[index][0][0, 0]]*2
+            if index == 0 and label is not None:
+                ax.plot(x, y, label=label, **bar_style)
+            else:
+                ax.plot(x, y, **bar_style)
     # mark all frequencies:
     for index in range(len(group_list)):
         for group in group_list[index]:
@@ -1945,22 +2084,30 @@ def main(data_file=None):
     print('fundamental frequencies of consistent groups:')
     print(fundamental_freqs(cgroups))
     print()
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, layout='constrained', sharey=True)
-    ax1.set_title('consistent groups')
-    plot_selected_groups(ax1, group_list, cgroups)
+    fig, axs = plt.subplots(2, 2, layout='constrained', sharey=True)
+    axs[0, 0].set_title('consistent groups')
+    plot_selected_groups(axs[0, 0], group_list, cgroups)
 
     # check almost empty group_list:
     group2_list = [[], group_list[1], []]
     cgroups = consistent(group2_list, 1.0)
-    ax2.set_title('consistent in mostly empty group list')
-    plot_selected_groups(ax2, group2_list, cgroups)
+    axs[0, 1].set_title('consistent in mostly empty group list')
+    plot_selected_groups(axs[0, 1], group2_list, cgroups)
 
     # check single group_list:
     group3_list = [group_list[1]]
     cgroups = consistent(group3_list, 1.0)
-    ax3.set_title('consistent in single group list')
-    plot_selected_groups(ax3, group3_list, cgroups)
+    axs[1, 0].set_title('consistent in single group list')
+    plot_selected_groups(axs[1, 0], group3_list, cgroups)
+
+    # closest groups:
+    cgroups, cindices = closest(group_list, 1.0, 3, 2)
+    print(fundamental_freqs(cgroups))
+    print(cindices)
+    axs[1, 1].set_title('closest groups')
+    plot_selected_groups(axs[1, 1], group_list, cgroups, cindices)
     plt.show()
+    print()
 
     fig, axs = plt.subplots(2, 2, layout='constrained')
     unique_freqs = unique(freqs, 1.0, 'power')
