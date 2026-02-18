@@ -1330,11 +1330,12 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
 
     Returns
     -------
-    closest_groups: (list of (list of ...)) list of list of 2-D arrays of float
-        For each unique fundamental frequency in `group_list` a list
-        of harmonic groups whose fundamental frequencies are closest
-        to each other. Each element has frequency of the harmonics in
-        the first column and corresponding power in the second column.
+    closest_groups: (list of (list of ...)) list of 2-D arrays of float
+        For each unique fundamental frequency in `group_list` the
+        harmonic group with the largest power among the ones whose
+        fundamental frequencies are closest to each other. Each element
+        has frequency of the harmonics in the first column and
+        corresponding power in the second column.
     closest_indices: (list of (list of ...)) list of two-tuple of int
         For each unique fundamental frequency in `group_list` the first and last
         index into `group_list` where the closest frequencies have been found.
@@ -1386,8 +1387,12 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
                 else:
                     break
             if i1 - i0 >= min_closest:
-                closest_groups.append([group_list[j][k]
-                                       for j, k in fidx[i0:i1]])
+                # find group with maximum power:
+                cgroup = group_list[fidx[i0][0]][fidx[i0][1]]
+                for j, k in fidx[i0 + 1:i1]:
+                    if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
+                        cgroup = group_list[j][k]
+                closest_groups.append(cgroup)
                 closest_indices.append((fidx[i0][0], fidx[i1 - 1][0]))
     else:
         closest_groups = []
@@ -1839,7 +1844,7 @@ def plot_selected_groups(ax, group_list, selected_groups, indices=None,
         for index in range(len(selected_groups)):
             x = [indices[index][0] + 0.75,
                  indices[index][1] + 1.25]
-            y = [selected_groups[index][0][0, 0]]*2
+            y = [selected_groups[index][0, 0]]*2
             if index == 0 and label is not None:
                 ax.plot(x, y, label=label, **bar_style)
             else:
@@ -2102,6 +2107,7 @@ def main(data_file=None):
 
     # closest groups:
     cgroups, cindices = closest(group_list, 1.0, 3, 2)
+    print('closest frequencies:')
     print(fundamental_freqs(cgroups))
     print(cindices)
     axs[1, 1].set_title('closest groups')
