@@ -212,7 +212,8 @@ class EODPlot():
         
 class ThunderfishDialog(QDialog):
 
-    def __init__(self, time, data, unit, ampl_max, power_freqs, powers,
+    def __init__(self, time, data, unit, ampl_max,
+                 power_freqs, power_times, powers,
                  channel, file_path, cfg, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.time = time
@@ -241,7 +242,7 @@ class ThunderfishDialog(QDialog):
         self.eod_props, self.mean_eods, self.spec_data, self.phase_data, \
         self.pulse_data, power_thresh, \
         self.skip_reason, self.zoom_window = \
-          detect_eods(self.data, self.rate, power_freqs, powers,
+          detect_eods(self.data, self.rate, power_freqs, power_times, powers,
                       min_clip=self.min_clip, max_clip=self.max_clip,
                       name=self.file_path, mode='wp',
                       verbose=2, plot_level=0, cfg=self.cfg)
@@ -473,10 +474,10 @@ class ThunderfishAnalyzer(Analyzer):
         freqs = None
         spec = None
         if 'spectrogram' in traces:
-            _, freqs, spec = traces['spectrogram']
+            times, freqs, spec = traces['spectrogram']
         dialog = ThunderfishDialog(time, data, self.source.unit,
                                    self.source.ampl_max,
-                                   freqs, spec, channel,
+                                   freqs, times, spec, channel,
                                    self.browser.data.file_path,
                                    self.cfg, self.browser)
         dialog.show()

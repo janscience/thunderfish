@@ -126,7 +126,7 @@ def extract_eods(files, thresholds, stds_only, cfg, verbose, plot_level,
                             # detect EODs in the data:
                             _, _, _, eod_props, mean_eods, spec_data, peak_data, _, _, _, _ = \
                               detect_eods(data[:,channel], sf.rate,
-                                          None, None,
+                                          None, None, None,
                                           min_clip, max_clip,
                                           name, verbose, plot_level,
                                           cfg)

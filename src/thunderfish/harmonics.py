@@ -1336,13 +1336,14 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
         fundamental frequencies are closest to each other. Each element
         has frequency of the harmonics in the first column and
         corresponding power in the second column.
-    closest_indices: (list of (list of ...)) list of two-tuple of int
-        For each unique fundamental frequency in `group_list` the first and last
-        index into `group_list` where the closest frequencies have been found.
+    closest_indices: (list of (list of ...)) 2-D array of int
+        For each unique fundamental frequency in `group_list` (rows)
+        the first and last index (two columns) into `group_list`
+        where the closest frequencies have been found.
 
     """
     if len(group_list) == 0:
-        return [], []
+        return [], np.zeros((0, 2))
     
     # check whether group_list is list of harmonic groups:
     list_of_groups = True
@@ -1363,26 +1364,24 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
         freq_indices = unique_indices(freqs, df_thresh, 0)
         for fidx in freq_indices:
             if len(fidx) < 2:
-                # keep min_closest occurances:
-                if len(fidx) >= min_closest:
-                    closest_groups.append([group_list[j][k] for j, k in fidx])
-                    closest_indices.append((fidx[0][0], fidx[-1][0]))
                 continue
             # find minimum difference in fundamental frequencies:
-            fp = np.array([freqs[j][k] for j, k in fidx])
+            fp = [freqs[j][k][0] for j, k in fidx]
             dfs = np.diff(fp)
             i0 = np.argmin(dfs)
             i1 = i0 + 1
             # expand to n_closest:
             for k in range(1, max_closest):
-                if i0 > 0 and i1 < len(dfs):
+                go_left = i0 > 0 and fidx[i0 - 1][0] + 1 == fidx[i0][0]
+                go_right = i1 < len(dfs) and fidx[i1][0] + 1 == fidx[i1 + 1][0]
+                if go_left and go_right:
                     if dfs[i0 - 1] <= dfs[i1]:
                         i0 -= 1
                     else:
                         i1 += 1
-                elif i0 > 0:
+                elif go_left:
                     i0 -= 1
-                elif i1 < len(dfs):
+                elif go_right:
                     i1 += 1
                 else:
                     break
@@ -1394,6 +1393,7 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
                         cgroup = group_list[j][k]
                 closest_groups.append(cgroup)
                 closest_indices.append((fidx[i0][0], fidx[i1 - 1][0]))
+        closest_indices = np.array(closest_indices)
     else:
         closest_groups = []
         closest_indices = []
