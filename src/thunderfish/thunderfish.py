@@ -413,18 +413,12 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
         wave_indices = np.zeros(len(wave_eodfs), dtype=int) - 3
         for k, idx in enumerate(power_indices):
             fish = wave_eodfs[idx]
-            """
-            eod_times = np.arange(0.0, len(data)/rate, 1.0/fish[0,0])
-            mean_eod, eod_times = \
-                eod_waveform(data, rate, eod_times, win_fac=3.0, min_win=0.0,
-                             min_sem=(k==0), **eod_waveform_args(cfg))
-            """
             window = wave_windows[idx]
             iw = int(rate/power_freqs[1])//2
             i0 = int(power_times[window[0]]*rate) - iw
             i1 = int(power_times[window[1]]*rate) + iw
-            mean_eod, eod_times, skips = \
-                waveeod_waveform(data[i0:i1], rate, fish[0, 0], win_fac=3.0)
+            mean_eod, times, skips = \
+                waveeod_waveform(data[i0:i1], rate, fish[0, 0], power_freqs[1])
             if len(mean_eod) == 0:
                 if verbose > 0:
                     print(f'skip   {fish[0, 0]:6.1f}Hz wave  fish:', skips)
@@ -436,9 +430,10 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 analyze_wave(mean_eod, None, fish, **analyze_wave_args(cfg))
             if error_str:
                 print(f'{name}: {error_str}')
-            clipped_frac = clipped_fraction(data, rate, eod_times,
+            eod_times = np.arange(i0/rate, i1/rate, 1/fish[0, 0])
+            clipped_frac = clipped_fraction(data[i0:i1], rate, eod_times,
                                             mean_eod, min_clip, max_clip)
-            props['n'] = len(eod_times)
+            props['n'] = len(times)
             props['index'] = len(eod_props)
             props['clipped'] = clipped_frac
             props['samplerate'] = rate

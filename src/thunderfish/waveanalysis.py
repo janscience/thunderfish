@@ -43,15 +43,15 @@ from thunderlab.tabledata import TableData
 from .harmonics import fundamental_freqs_and_power
 
 
-def waveeod_waveform(data, rate, freq, win_fac=2.0):
+def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5):
     """Retrieve average EOD waveform via Fourier transform.
 
-    TODO: use power spectra to check minimum data segment needed and
-    check for changes in frequency over several segments!
-
-    TODO: return waveform with higher samplign rate? (important for
+    TODO: return waveform with higher sampling rate? (important for
     2kHz waves on 24kHz sampling). But this seems to render some EODs
     inacceptable in the further thunderfish processing pipeline.
+
+    Fourier series are extracted for frequencies from `freq` $\pm$
+    `freq_resolution`.
 
     Parameters
     ----------
@@ -60,113 +60,130 @@ def waveeod_waveform(data, rate, freq, win_fac=2.0):
     rate: float
         Sampling rate of the data in Hertz.
     freq: float
-        EOD frequency.
+        Estimated EOD frequency.
+    freq_resolution: float
+        Frequency resolution in Hertz. Ususally the resolution of the power spectrum
+        from which `freq` was deduced.
     win_fac: float
-        The snippet size is the EOD period times `win_fac`. The EOD period
-        is determined as the minimum interval between EOD times.
+        The snippet size is the EOD period (`1/freq`)  times `win_fac`.
     
     Returns
     -------
     mean_eod: 2-D array
         Average of the EOD snippets. First column is time in seconds,
         second column the mean eod, third column the standard error.
-    eod_times: 1-D array
-        Times of EOD peaks in seconds that have been actually used to
-        calculate the averaged EOD waveform.
+    times: 1-D array
+        Start times of windows in which Fourier series have been extracted.
     skip_reason: str
         An empty string if the waveform is good, otherwise a string
         indicating the failure.
+
     """
 
     @jit(nopython=True)
-    def fourier_wave(data, rate, freq):
+    def fourier_wave(data, rate, freq, n, frate):
         """
         extracting wave via fourier coefficients
         """
-        twave = np.arange(0, (1+win_fac)/freq, 1/rate)
+        twave = np.arange(0, (1 + win_fac)/freq, 1/frate)
         wave = np.zeros(len(twave))
         t = np.arange(len(data))/rate
-        for k in range(0, 31):
+        for k in range(n):
             Xk = np.trapz(data*np.exp(-1j*2*np.pi*k*freq*t), t)*2/t[-1]
             wave += np.real(Xk*np.exp(1j*2*np.pi*k*freq*twave))
         return wave
 
     @jit(nopython=True)
-    def fourier_range(data, rate, f0, f1, df):
+    def fourier_range(data, rate, frange, n, frate):
         wave = np.zeros(1)
-        freq = f0
-        for f in np.arange(f0, f1, df):
-            w = fourier_wave(data, rate, f)
+        freq = 0.0
+        for f in frange:
+            w = fourier_wave(data, rate, f, n, frate)
             if np.max(w) - np.min(w) > np.max(wave) - np.min(wave):
                 wave = w
                 freq = f
         return wave, freq
 
     # TODO: parameterize!
-    tsnippet = 2
+    tsnippet = 2/freq_resolution
+    nfreqs = 5
+    step = int(tsnippet*rate)
+    frate = 10*rate
     min_corr = 0.98
     min_ampl_frac = 0.5
-    frange = 0.1
-    fstep = 0.1
+    frange = np.linspace(freq - freq_resolution, freq + freq_resolution, nfreqs)
+    # extract Fourier series from data segements:
     waves = []
     freqs = []
-    times = []
-    step = int(tsnippet*rate)
-    for i in range(0, len(data) - step//2, step//2):
-        w, f = fourier_range(data[i:i + step], rate, freq - frange,
-                             freq + frange + fstep/2, fstep)
+    indices = []
+    for i in range(0, len(data), step//8):
+        w, f = fourier_range(data[i:i + step], rate, frange, 6, frate)
         waves.append(w)
         freqs.append(f)
-        """
-        waves.append(np.zeros(1))
-        freqs.append(freq)
-        for f in np.arange(freq - frange, freq + frange + fstep/2, fstep):
-            w = fourier_wave(data[i:i + step], rate, f)
-            if np.max(w) - np.min(w) > np.max(waves[-1]) - np.min(waves[-1]):
-                waves[-1] = w
-                freqs[-1] = f
-        """
-        times.append(np.arange(i/rate, (i + step)/rate, 1/freqs[-1]))
+        indices.append(i)
     eod_freq = np.mean(freqs)
     mean_eod = np.zeros((0, 3))
-    eod_times = np.zeros((0))
+    freqs = np.array(freqs)
+    indices = np.array(indices)
     if len(waves) == 0:
-        return mean_eod, eod_times, 'ERROR: empty frequency range'
+        return mean_eod, indices, 'ERROR: empty frequency range'
+    # cut all waves to same length starting at maximum:
+    pidx = np.zeros(len(waves), dtype=int)
     for k in range(len(waves)):
-        period = int(np.ceil(rate/freqs[k]))
-        i = np.argmax(waves[k][:period])
-        waves[k] = waves[k][i:]
+        period = int(np.ceil(frate/freqs[k]))
+        pidx[k] = np.argmax(waves[k][:period])
     n = np.min([len(w) for w in waves])
-    waves = np.array([w[:n] for w in waves])
-    # only snippets that are similar:
+    f = np.min(freqs)
+    p = int((win_fac - 1)*frate/f) + 1
+    n = min(n, p)
+    # refine waveform:
+    waves = []
+    for i, f, p in zip(indices, freqs, pidx):
+        w = fourier_wave(data[i:i + step], rate, f, 31, frate)
+        waves.append(w[p:p + n])
+    waves = np.array(waves)
+    # only snippets that are most similar:
     if len(waves) > 1:
         corr = np.corrcoef(waves)
+        r = np.arange(len(corr))
+        corr_vals = np.unique(corr[r[:, None] < r])
+        corr_vals = corr_vals[corr_vals > min_corr]
+        min_n = max(2, len(corr)//4)
+        min_c = corr_vals[-min_n] if len(corr_vals) > min_n else min_corr
+        #print()
+        #print(corr_vals)
+        #print(len(corr), min_n, min_c)
         nmax = np.argmax(np.sum(corr > min_corr, axis=1))
         if nmax <= 1:
             nmax = 2
+        # TODO: this selection is wrong!!!
         select = np.sum(corr > min_corr, axis=1) >= nmax
         waves = waves[select]
-        times = [times[k] for k in range(len(times)) if select[k]]
+        freqs = freqs[select]
+        indices = indices[select]
         if len(waves) == 0:
-            return mean_eod, eod_times, 'no stable waveforms'
+            return mean_eod, indices, 'no stable waveforms'
     # only the largest snippets:
     ampls = np.std(waves, axis=1)
     select = ampls >= min_ampl_frac*np.max(ampls)
     waves = waves[select]
-    times = [times[k] for k in range(len(times)) if select[k]]
+    freqs = freqs[select]
+    indices = indices[select]
     if len(waves) == 0:
-        return mean_eod, eod_times, 'ERROR: no large waveform'
+        return mean_eod, indices, 'ERROR: no large waveform'
     """
-    #plt.plot(freqs)
-    plt.plot(waves.T)
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 2)
+    for w in waves:
+        ax.plot(w)
+    ax.set_title(f'EODf={np.mean(freqs):.1f}Hz')
     plt.show()
     """
     mean_eod = np.zeros((n, 3))
-    mean_eod[:, 0] = np.arange(len(mean_eod))/rate
+    mean_eod[:, 0] = np.arange(len(mean_eod))/frate
     mean_eod[:, 1] = np.mean(waves, axis=0)
     mean_eod[:, 2] = np.std(waves, axis=0)
-    eod_times = np.concatenate(times)
-    return mean_eod, eod_times, ''
+    return mean_eod, indices/rate, ''
 
 
 def fourier_series(t, freq, *ap):
