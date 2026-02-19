@@ -31,6 +31,7 @@ Extract and analyze harmonic frequencies from power spectra.
 - `add_power_ranks()`: add a column with power ranks.
 - `similar_indices()`: indices of similar frequencies.
 - `unique_indices()`: for each unique fundamental frequency a list of indices indicating where it is found. 
+- `collapse()`: collapse harmonic groups with similar fundamental frequencies to a single one.
 - `consistent()`: harmonic groups whose fundamental frequencies consistently appear everywhere. 
 - `closest()`: harmonic groups whose fundamental frequencies are closest to each other. 
 - `unique_mask()`: mark similar frequencies from different recordings as dublicate.
@@ -1110,7 +1111,7 @@ def add_relative_power(freqs):
     power_freqs: list of 2-D arrays
         Same as freqs, but with an added column containing the relative power.
     """
-    return [np.column_stack((f, f[:,1] - np.max(f[:,1]))) for f in freqs]
+    return [np.column_stack((f, f[:, 1] - np.max(f[:, 1]))) for f in freqs]
 
 
 def add_power_ranks(freqs):
@@ -1133,7 +1134,7 @@ def add_power_ranks(freqs):
     """
     rank_freqs = []
     for f in freqs:
-        i = np.argsort(f[:,1])[::-1]
+        i = np.argsort(f[:, 1])[::-1]
         ranks = np.empty_like(i)
         ranks[i] = -np.arange(len(i))
         rank_freqs.append(np.column_stack((f, ranks)))
@@ -1253,6 +1254,35 @@ def unique_indices(freqs, df_thresh, nextfs=0):
     return freq_indices
 
 
+def collapse(group_list):
+    """Collapse harmonic groups with similar fundamental frequencies to a single one.
+    
+    The group with the highest power (second column summed over all harmonics) is returned.
+
+    Parameters
+    ----------
+    group_list: list of 2-D arrays of float
+        List of harmonic groups that are supposed to have similar fundamental frequencies.
+    
+    Returns
+    -------
+    group: 2-D array of float
+        Harmonic group with first column frequency of harmonics, second column corresponding powers.
+        Further columns are optional.
+    index: int
+        Index of the returned harmonic group.
+    """
+    if len(group_list) == 0:
+        return np.zeros((0, 2)), 0
+    rgroup = group_list[0]
+    rindex = 0
+    for k, group in enumerate(group_list[1:]):
+        if np.sum(group[:, 1]) > np.sum(rgroup[:, 1]):
+            rgroup = group
+            rindex = 1 + k
+    return rgroup, rindex
+
+    
 def consistent(group_list, df_thresh):
     """Harmonic groups whose fundamental frequencies consistently appear everywhere. 
 
@@ -1294,11 +1324,7 @@ def consistent(group_list, df_thresh):
         for idx in indices:
             # frequency appears everywhere:
             if len(idx) == len(freqs):
-                # find group with maximum power:
-                cgroup = group_list[idx[0][0]][idx[0][1]]
-                for j, k in idx[1:]:
-                    if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
-                        cgroup = group_list[j][k]
+                cgroup, _ = collapse([group_list[j][k] for j, k in idx])
                 consistent_groups.append(cgroup)
     else:
         consistent_groups = []
@@ -1366,8 +1392,7 @@ def closest(group_list, df_thresh, close_thresh=0, min_closest=1):
             if len(fidx) == 0:
                 continue
             if len(fidx) < 2:
-                if min_closest <= 1:
-                    # TODO: take the one with highes power/or reduce() function:
+                if min_closest < 2:
                     cgroup = group_list[fidx[0][0]][fidx[0][1]]
                     closest_groups.append(cgroup)
                     closest_indices.append((fidx[0][0], fidx[0][0]))
@@ -1391,10 +1416,9 @@ def closest(group_list, df_thresh, close_thresh=0, min_closest=1):
             dfs = np.abs(np.diff(fp))
             if np.all(np.isnan(dfs)):
                 if min_closest <= 1:
-                    # TODO: take the one with highes power/or reduce() function:
-                    cgroup = group_list[fidx[0][0]][fidx[0][1]]
+                    cgroup, cinx = collapse([group_list[j][k] for j, k in fidx])
                     closest_groups.append(cgroup)
-                    closest_indices.append((fidx[0][0], fidx[0][0]))
+                    closest_indices.append((fidx[cinx][0], fidx[cinx][0]))
                 continue                
             i0 = fpi[np.nanargmin(dfs)]
             i1 = i0 + 1
@@ -1415,11 +1439,7 @@ def closest(group_list, df_thresh, close_thresh=0, min_closest=1):
                 else:
                     break
             if i1 + 1 - i0 >= min_closest:
-                # find group with maximum power:
-                cgroup = group_list[fidx[i0][0]][fidx[i0][1]]
-                for j, k in fidx[i0 + 1:i1 + 1]:
-                    if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
-                        cgroup = group_list[j][k]
+                cgroup, _ = collapse([group_list[j][k] for j, k in fidx[i0:i1 + 1]])
                 closest_groups.append(cgroup)
                 closest_indices.append((fidx[i0][0], fidx[i1][0]))
         closest_indices = np.array(closest_indices)
@@ -1525,6 +1545,11 @@ def unique(freqs, df_thresh, mode='power', nextfs=0):
     unique_freqs: (list of (list of ...)) list of 2-D arrays
         Same as `freqs` but elements with similar fundamental frequencies
         removed.
+
+    Raises
+    ------
+    ValueError:
+        Invalid mode string.
     """
     if len(freqs) == 0:
         return []
@@ -1546,7 +1571,7 @@ def unique(freqs, df_thresh, mode='power', nextfs=0):
             rank_freqs = [f[:, [0, 2, 1]] for f in add_power_ranks(freqs)]
             mask = unique_mask(rank_freqs, df_thresh, nextfs)
         else:
-            raise ValueError('%s is not a valid mode for unique(). Choose one of "power", "relpower", or "rank"')
+            raise ValueError(f'{mode} is not a valid mode for unique(). Choose one of "power", "relpower", or "rank"')
         unique_freqs = []
         for f, m in zip(freqs, mask):
             unique_freqs.append(f[m])
@@ -1863,7 +1888,7 @@ def plot_selected_groups(ax, group_list, selected_groups, indices=None,
     # mark selected frequencies:
     if indices is None:
         for index in range(len(selected_groups)):
-            x = [0.75, len(group_list) + 0.25]
+            x = [-0.25, len(group_list) - 0.75]
             y = [selected_groups[index][0, 0]]*2
             if index == 0 and label is not None:
                 ax.plot(x, y, label=label, **bar_style)
@@ -1871,8 +1896,8 @@ def plot_selected_groups(ax, group_list, selected_groups, indices=None,
                 ax.plot(x, y, **bar_style)
     else:
         for index in range(len(selected_groups)):
-            x = [indices[index][0] + 0.75,
-                 indices[index][1] + 1.25]
+            x = [indices[index][0] - 0.25,
+                 indices[index][1] + 0.25]
             y = [selected_groups[index][0, 0]]*2
             if index == 0 and label is not None:
                 ax.plot(x, y, label=label, **bar_style)
@@ -1881,8 +1906,8 @@ def plot_selected_groups(ax, group_list, selected_groups, indices=None,
     # mark all frequencies:
     for index in range(len(group_list)):
         for group in group_list[index]:
-            ax.plot(index + 1, group[0, 0], **freq_style)
-    ax.set_xlim([0.25, len(group_list) + 0.75])
+            ax.plot(index, group[0, 0], **freq_style)
+    ax.set_xlim([-0.5, len(group_list) - 0.5])
     ax.xaxis.set_major_locator(plt.MultipleLocator(1))
     ax.set_ylabel('frequency [Hz]')
     ax.set_xlabel('group index')
@@ -1917,9 +1942,9 @@ def plot_unique_frequencies(ax, freqs_list, unique_freqs,
         for freq in freqs:
             if len(unique_freqs[index][:, 0]) > 0 and \
                np.min(np.abs(unique_freqs[index][:, 0] - freq)) < 1e-8:
-                ax.plot(index + 1, freq, **unique_style)
-        ax.plot(np.ones(len(freqs)) + index, freqs, **freq_style)
-    ax.set_xlim([0.25, len(freqs_list) + 0.75])
+                ax.plot(index, freq, **unique_style)
+        ax.plot(np.zeros(len(freqs)) + index, freqs, **freq_style)
+    ax.set_xlim([-0.5, len(freqs_list) - 0.5])
     ax.xaxis.set_major_locator(plt.MultipleLocator(1))
     ax.set_ylabel('frequency [Hz]')
     ax.set_xlabel('group index')
