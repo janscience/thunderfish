@@ -418,7 +418,8 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
             i0 = int(power_times[window[0]]*rate) - iw
             i1 = int(power_times[window[1]]*rate) + iw
             mean_eod, times, skips = \
-                waveeod_waveform(data[i0:i1], rate, fish[0, 0], power_freqs[1])
+                waveeod_waveform(data[i0:i1], rate, fish[0, 0], power_freqs[1],
+                                 verbose=verbose - 1)
             if len(mean_eod) == 0:
                 if verbose > 0:
                     print(f'skip   {fish[0, 0]:6.1f}Hz wave  fish:', skips)
