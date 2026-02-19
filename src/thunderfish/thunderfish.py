@@ -279,10 +279,10 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 else:
                     print('  none')
             wave_eodfs_list.append(wave_eodfs)
-        max_closest = (len(wave_eodfs_list) + 1) // 2
+        min_closest = (len(wave_eodfs_list) + 1) // 2
         wave_eodfs, wave_windows = \
             closest(wave_eodfs_list, df_thresh=cfg.value('frequencyThreshold'),
-                    max_closest=1, min_closest=max_closest)
+                    close_thresh=0.01*cfg.value('frequencyThreshold'), min_closest=min_closest)
         p0 = np.min(wave_windows[:, 0])
         p1 = np.max(wave_windows[:, 1])
         powers = np.mean(powers[:, p0:p1 + 1], 1)
