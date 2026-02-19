@@ -1321,8 +1321,12 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
         Fundamental frequencies reciprocally being the closest to each other
         and closer than this threshold are considered equal.
     max_closest: int
-        Try to return at maximum that many harmonic groups whose fundamental
-        frequencies are closest to each other.
+        Try to return at maximum that many subsequent harmonic groups
+        whose fundamental frequencies are closest to each other.
+        If frequencies do differ by less than `0.1*def_thresh`,
+        more than `max_closest` can be returned.
+        May be smaller than `min_closest` to enforce frequency differences
+        smaller than `0.1*def_thresh`.
     min_closest: int
         Only return harmonic groups that have at minimum that many
         harmonic groups whose fundamental frequencies are closest to
@@ -1332,7 +1336,7 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
     -------
     closest_groups: (list of (list of ...)) list of 2-D arrays of float
         For each unique fundamental frequency in `group_list` the
-        harmonic group with the largest power among the ones whose
+        harmonic group with the largest power among subsequent ones whose
         fundamental frequencies are closest to each other. Each element
         has frequency of the harmonics in the first column and
         corresponding power in the second column.
@@ -1363,17 +1367,51 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
         freqs = fundamental_freqs_and_power(group_list)
         freq_indices = unique_indices(freqs, df_thresh, 0)
         for fidx in freq_indices:
-            if len(fidx) < 2:
+            if len(fidx) == 0:
                 continue
-            # find minimum difference in fundamental frequencies:
-            fp = [freqs[j][k][0] for j, k in fidx]
-            dfs = np.diff(fp)
-            i0 = np.argmin(dfs)
+            if len(fidx) < 2:
+                if min_closest <= 1:
+                    # TODO: take the one with highes power/or reduce() function:
+                    cgroup = group_list[fidx[0][0]][fidx[0][1]]
+                    closest_groups.append(cgroup)
+                    closest_indices.append((fidx[0][0], fidx[0][0]))
+                continue
+            # find minimum difference in subsequent fundamental frequencies:
+            fp = []
+            fpi = []
+            fi = 0
+            for i in range(len(freqs)):
+                if fi < len(fidx):
+                    j, k = fidx[fi]
+                else:
+                    j = len(freqs)
+                fpi. append(fi)
+                if j == i:
+                    fp. append(freqs[j][k][0])
+                    fi += 1
+                else:
+                    fp. append(np.nan)
+            fp = np.array(fp)
+            dfs = np.abs(np.diff(fp))
+            if np.all(np.isnan(dfs)):
+                if min_closest <= 1:
+                    # TODO: take the one with highes power/or reduce() function:
+                    cgroup = group_list[fidx[0][0]][fidx[0][1]]
+                    closest_groups.append(cgroup)
+                    closest_indices.append((fidx[0][0], fidx[0][0]))
+                continue                
+            i0 = fpi[np.nanargmin(dfs)]
             i1 = i0 + 1
-            # expand to n_closest:
-            for k in range(1, max_closest):
+            dfs = np.abs(np.diff(fp[np.isfinite(fp)]))
+            # expand to max_closest:
+            for k in range(1, len(fidx)):
                 go_left = i0 > 0 and fidx[i0 - 1][0] + 1 == fidx[i0][0]
                 go_right = i1 < len(dfs) and fidx[i1][0] + 1 == fidx[i1 + 1][0]
+                if k >= max_closest:
+                    if go_left:
+                        go_left = abs(dfs[i0 - 1]) < 0.1*df_thresh
+                    if go_right:
+                        go_right = abs(dfs[i1]) < 0.1*df_thresh
                 if go_left and go_right:
                     if dfs[i0 - 1] <= dfs[i1]:
                         i0 -= 1
@@ -1385,14 +1423,14 @@ def closest(group_list, df_thresh, max_closest=2, min_closest=1):
                     i1 += 1
                 else:
                     break
-            if i1 - i0 >= min_closest:
+            if i1 + 1 - i0 >= min_closest:
                 # find group with maximum power:
                 cgroup = group_list[fidx[i0][0]][fidx[i0][1]]
-                for j, k in fidx[i0 + 1:i1]:
+                for j, k in fidx[i0 + 1:i1 + 1]:
                     if np.sum(group_list[j][k][:, 1]) > np.sum(cgroup[:, 1]):
                         cgroup = group_list[j][k]
                 closest_groups.append(cgroup)
-                closest_indices.append((fidx[i0][0], fidx[i1 - 1][0]))
+                closest_indices.append((fidx[i0][0], fidx[i1][0]))
         closest_indices = np.array(closest_indices)
     else:
         closest_groups = []

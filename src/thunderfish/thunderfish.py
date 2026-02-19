@@ -139,6 +139,7 @@ def configuration():
     """
     cfg = ConfigFile()
     add_spectrum_config(cfg)
+    cfg.set('frequencyResolution', 0.5)
     cfg.add('frequencyThreshold', 1.0, 'Hz',
             'The fundamental frequency of each fish needs to be detected in each power spectrum within this threshold.')
     # TODO: make this threshold dependent on frequency resolution!
@@ -269,10 +270,10 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
         h_kwargs.update(harmonic_groups_args(cfg))
         wave_eodfs_list = []
         for i, psd in enumerate(powers.T):
-            wave_eodfs = harmonic_groups(power_freqs, psd, verbose-1,
+            wave_eodfs = harmonic_groups(power_freqs, psd, verbose - 1,
                                          **h_kwargs)[0]
             if verbose > 0 and powers.shape[1] > 1:
-                print(f'fundamental frequencies detected in spectrum of window {i}:')
+                print(f'{len(wave_eodfs)} fundamental frequencies detected in spectrum of window {i}:')
                 if len(wave_eodfs) > 0:
                     print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
                 else:
@@ -281,17 +282,23 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
         max_closest = (len(wave_eodfs_list) + 1) // 2
         wave_eodfs, wave_windows = \
             closest(wave_eodfs_list, df_thresh=cfg.value('frequencyThreshold'),
-                    max_closest=max_closest, min_closest=1)
+                    max_closest=1, min_closest=max_closest)
         p0 = np.min(wave_windows[:, 0])
         p1 = np.max(wave_windows[:, 1])
         powers = np.mean(powers[:, p0:p1 + 1], 1)
         if verbose > 0:
+            if verbose > 1:
+                print()
             if len(wave_eodfs) > 0:
                 fstr = 'ies' if len(wave_eodfs) > 1 else 'y'
-                print(f'found {len(wave_eodfs):2d} EOD frequenc{fstr} consistent in all power spectra:')
-                print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
+                print(f'found {len(wave_eodfs):2d} EOD frequenc{fstr} sufficiently close in all spectra:')
+                if verbose > 1:
+                    for freq, win in zip(wave_eodfs, wave_windows):
+                        print(f'  {freq[0, 0]:6.1f}Hz in spectra {win[0]} - {win[1]}')
+                else:
+                    print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
             else:
-                print('no fundamental frequencies are consistent in all power spectra')
+                print('no fundamental frequencies are sufficiently close in all spectra')
 
     # analysis results:
     eod_props = []
