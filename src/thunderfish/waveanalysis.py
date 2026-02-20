@@ -166,8 +166,8 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
         np.fill_diagonal(corr, 0.0)
         corr_vals = np.sort(corr[corr > min_corr])
         if len(corr_vals) == 0:
-            return mean_eod, freq, indices/rate, 'no stable waveforms'
-        min_c = corr_vals[-len(corr_vals)//4]
+            return mean_eod, freq, indices/rate, f'waveforms not stable (max_corr={np.max(corr):.5f} SMALLER than {min_corr:.5f})'
+        min_c = corr_vals[len(corr_vals)//2]
         num_c = np.sum(corr > min_c, axis=1)
         num_cmax = np.max(num_c)
         num_cthresh = max(2, num_cmax - 2)
