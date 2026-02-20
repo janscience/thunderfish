@@ -748,7 +748,7 @@ def extract_fundamentals(good_freqs, all_freqs, freq_tol, max_freq_tol,
         # check:
         if fundamental_ok and mains_ok and smooth_ok and amplitude_ok:
             if verbose > 0:
-                print('Accepting  harmonic group from %s=%7.2fHz: %7.2fHz power=%9.3g nharmonics=%2d, use count=%d'
+                print('accept  harmonic group from %s=%7.2fHz: %7.2fHz power=%9.3g nharmonics=%2d, use count=%d'
                       % (f0s, fmax, harm_group[0,0], np.sum(harm_group[first_h:,1]),
                          len(harm_group), np.sum(harm_group[first_h:,2])))
             group_list.append(harm_group[:,0:2])
@@ -759,7 +759,7 @@ def extract_fundamentals(good_freqs, all_freqs, freq_tol, max_freq_tol,
                 ms = 'not ' if mains_ok else 'IS'
                 ss = 'smaller' if smooth_ok else 'LARGER '
                 ps = 'smaller' if amplitude_ok else 'LARGER '
-                print('Discarded  harmonic group from %s=%7.2fHz: %7.2fHz power=%9.3g: %s in frequency range, %s mains frequency, smooth=%4.1fdB %s than %4.1fdB, relpower[%d]=%5.1fdB %s than %5.1fdB'
+                print('discard harmonic group from %s=%7.2fHz: %7.2fHz power=%9.3g: %s in frequency range, %s mains frequency, smooth=%4.1fdB %s than %4.1fdB, relpower[%d]=%5.1fdB %s than %5.1fdB'
                       % (f0s, fmax, harm_group[0,0], np.sum(harm_group[first_h:,1]),
                          fs, ms, diff, ss, max_db_diff,
                          pi, db_powers[pi], ps, max_harmonics_db))
@@ -915,9 +915,10 @@ def harmonic_groups(psd_freqs, psd, verbose=0, check_freqs=[],
     -------
     groups: list of 2-D arrays
         List of all extracted harmonic groups, sorted by fundamental frequency.
-        Each harmonic group is a 2-D array with the first dimension the harmonics
-        and the second dimension containing frequency and power of each harmonic.
-        If the power is zero, there was no corresponding peak in the power spectrum.
+        Each harmonic group is a 2-D array with the harmonics in the rows,
+        frequency of each harmonic in the first column and corresponding
+        power in the second column. If the power is zero, there was no
+        corresponding peak in the power spectrum.
     fzero_harmonics: list of ints
         The harmonics from which the fundamental frequencies were computed.
     mains: 2-d array
@@ -1698,7 +1699,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
             color_kwargs = {'color': colors[k%len(colors)]}
         label = f'{group[0, 0]:6.1f} Hz'
         if label_power:
-            label += f' {decibel(np.array([np.sum(group[:,1])]))[0]:6.1f} dB'
+            label += f' {decibel(np.array([np.sum(group[:,1])]))[0]:6.1f}dB'
         if indices is not None:
             if indices[i] < 0:
                 label = '(' + label + ')'

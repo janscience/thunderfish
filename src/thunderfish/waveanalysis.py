@@ -46,7 +46,7 @@ from .harmonics import fundamental_freqs_and_power
 
 def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
                      frate=1e6, max_harmonics=21,
-                     min_corr=0.99, min_ampl_frac=0.5,
+                     min_corr=0.99, min_ampl_frac=0.8,
                      verbose=0, plot_level=0):
     """Retrieve average EOD waveform via Fourier transform.
 
@@ -85,6 +85,8 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
     mean_eod: 2-D array
         Average of the EOD snippets. First column is time in seconds,
         second column the mean eod, third column the standard error.
+    eod_freq: float
+        Refined EOD frequency.
     times: 1-D array
         Start times of windows in which Fourier series have been extracted.
     skip_reason: str
@@ -117,9 +119,9 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
                 freq = f
         return wave, freq
 
-    plot_level = 1
-    tsnippet = 2/freq_resolution
-    nfreqs = 5
+    #plot_level = 1
+    tsnippet = 2/freq_resolution   # twice as long window is essential!
+    nfreqs = 5                     # twice the frequency resolution is necessary and sufficient!
     step = int(tsnippet*rate)
     # extract Fourier series from data segements:
     waves = []
@@ -154,7 +156,7 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
         fig, axs = plt.subplots(2, 3, width_ratios=[8, 8, 1],
                                 layout='constrained')
         axs[1, 2].set_visible(False)
-        axs[0, 0].set_title(f'EODf={np.mean(freqs):.1f}Hz')
+        axs[0, 0].set_title(f'EODf={np.mean(freqs):.2f}Hz')
         for w in waves:
             axs[0, 0].plot(w)
         axs[0, 0].set_xlabel('time (indices)')
@@ -164,12 +166,15 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
         np.fill_diagonal(corr, 0.0)
         corr_vals = np.sort(corr[corr > min_corr])
         if len(corr_vals) == 0:
-            return mean_eod, indices/rate, 'no stable waveforms'
+            return mean_eod, freq, indices/rate, 'no stable waveforms'
         min_c = corr_vals[-len(corr_vals)//4]
         num_c = np.sum(corr > min_c, axis=1)
         num_cmax = np.max(num_c)
         num_cthresh = max(2, num_cmax - 2)
         mask = num_c >= num_cthresh
+        waves = waves[mask]
+        freqs = freqs[mask]
+        indices = indices[mask]
         if plot_level > 0:
             axs[0, 1].set_title('Correlations')
             i = np.argmax(corr)
@@ -189,27 +194,27 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
             axs[1, 1].xaxis.set_major_locator(plt.MultipleLocator(1))
             axs[1, 1].yaxis.set_major_locator(plt.MultipleLocator(1))
         if verbose > 0:
+            np.set_printoptions(formatter={'float': lambda x: f'{x:.2f}'})
             print()
-            print(f'extract{freq:6.1f}Hz wave  fish: min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax}, segments={len(corr)}, num_selected={np.sum(mask)}, selected={np.nonzero(mask)[0]}')
-        waves = waves[mask]
-        freqs = freqs[mask]
-        indices = indices[mask]
+            print(f'extract {freq:7.2f}Hz wave  fish: min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax}, segments={len(corr)}, num_selected={np.sum(mask)}, selected={np.nonzero(mask)[0]}, EODfs={freqs}, EODf={np.mean(freqs):.2f}Hz')
         if len(waves) == 0:
             if plot_level > 0:
                 plt.show()
-            return mean_eod, indices/rate, f'waveforms not stable (min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax})'
+            return mean_eod, freq, indices/rate, f'waveforms not stable (min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax})'
     # only the largest snippets:
     ampls = np.std(waves, axis=1)
     mask = ampls >= min_ampl_frac*np.max(ampls)
+    if verbose > 0 and np.sum(mask) < len(ampls):
+        print(f'                              removed {len(ampls) - np.sum(mask)} small amplitude segments')
     waves = waves[mask]
     freqs = freqs[mask]
     indices = indices[mask]
     if len(waves) == 0:
         if plot_level > 0:
             plt.show()
-        return mean_eod, indices/rate, 'ERROR: no large waveform'
+        return mean_eod, freq, indices/rate, 'ERROR: no large waveform'
     if plot_level > 0:
-        axs[1, 0].set_title('selected EODs')
+        axs[1, 0].set_title(f'selected EODs: EODf={np.mean(freqs):.2f}Hz')
         for w in waves:
             axs[1, 0].plot(w)
         axs[1, 0].set_xlabel('time (indices)')
@@ -219,7 +224,8 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
     mean_eod[:, 0] = np.arange(len(mean_eod))/frate
     mean_eod[:, 1] = np.mean(waves, axis=0)
     mean_eod[:, 2] = np.std(waves, axis=0)
-    return mean_eod, indices/rate, ''
+    eod_freq = np.mean(freqs)
+    return mean_eod, eod_freq, indices/rate, ''
 
 
 def fourier_series(t, freq, *ap):
