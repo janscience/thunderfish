@@ -285,9 +285,12 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                     df_thresh=cfg.value('frequencyThreshold'),
                     close_thresh=1*cfg.value('frequencyThreshold'),
                     min_closest=min_closest)
-        p0 = np.min(wave_windows[:, 0])
-        p1 = np.max(wave_windows[:, 1])
-        powers = np.mean(powers[:, p0:p1 + 1], 1)
+        if len(wave_windows) > 0:
+            p0 = np.min(wave_windows[:, 0])
+            p1 = np.max(wave_windows[:, 1])
+            powers = np.mean(powers[:, p0:p1 + 1], 1)
+        else:
+            powers = np.mean(powers, 1)
         if verbose > 0:
             if verbose > 1:
                 print()
