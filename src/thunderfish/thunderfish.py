@@ -50,7 +50,7 @@ from .checkpulse import check_pulse, add_check_pulse_config, check_pulse_args
 from .pulses import extract_pulsefish
 from .harmonics import add_psd_peak_detection_config, add_harmonic_groups_config
 from .harmonics import harmonic_groups_args, psd_peak_detection_args
-from .harmonics import harmonic_groups, closest
+from .harmonics import harmonic_groups, closest, consistent
 from .harmonics import colors_markers, plot_harmonic_groups
 from .fakefish import pulsefish_spectrum
 from .pulseanalysis import analyze_pulse, plot_pulse_eods, plot_pulse_spectrum
@@ -281,8 +281,10 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
             wave_eodfs_list.append(wave_eodfs)
         min_closest = (len(wave_eodfs_list) + 1) // 2
         wave_eodfs, wave_windows = \
-            closest(wave_eodfs_list, df_thresh=cfg.value('frequencyThreshold'),
-                    close_thresh=0.01*cfg.value('frequencyThreshold'), min_closest=min_closest)
+            closest(wave_eodfs_list,
+                    df_thresh=cfg.value('frequencyThreshold'),
+                    close_thresh=1*cfg.value('frequencyThreshold'),
+                    min_closest=min_closest)
         p0 = np.min(wave_windows[:, 0])
         p1 = np.max(wave_windows[:, 1])
         powers = np.mean(powers[:, p0:p1 + 1], 1)
@@ -419,7 +421,7 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
             i1 = int(power_times[window[1]]*rate) + iw
             mean_eod, eod_freq, times, skips = \
                 waveeod_waveform(data[i0:i1], rate, fish[0, 0], power_freqs[1],
-                                 verbose=verbose - 1)
+                                 verbose=verbose - 1, plot_level=plot_level)
             if len(mean_eod) == 0:
                 if verbose > 0:
                     print(f'skip    {fish[0, 0]:7.2f}Hz wave  fish:', skips)
@@ -1484,7 +1486,7 @@ def thunderfish(filename, load_kwargs, cfg, channel=0,
             win_pos = time
         data, idx0, idx1, clipped, min_clip, max_clip = \
             analysis_window(raw_data, rate, ampl_max, win_pos, cfg,
-                            plot_level>0)
+                            plot_level)
         found_bestwindow = idx1 > 0
         if not found_bestwindow:
             return f'{filename}: not enough data for requested window length. You may want to adjust the windowSize parameter in the configuration file.'

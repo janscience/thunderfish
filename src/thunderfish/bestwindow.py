@@ -485,18 +485,27 @@ def best_window(data, rate, expand=False, win_size=1., win_shift=0.5,
     clipped: float
         The fraction of clipped peaks or troughs.
     """
-    start_inx, end_inx, clipped = best_window_indices(data, rate, expand,
-                                                      win_size, win_shift,
-                                                      thresh_fac, percentile,
-                                                      min_clip, max_clip,
-                                                      w_cv_interv, w_ampl, w_cv_ampl,
-                                                      tolerance, plot_data_func, **kwargs)
+    start_inx, end_inx, clipped = best_window_indices(data, rate,
+                                                      expand,
+                                                      win_size,
+                                                      win_shift,
+                                                      thresh_fac,
+                                                      percentile,
+                                                      min_clip,
+                                                      max_clip,
+                                                      w_cv_interv,
+                                                      w_ampl,
+                                                      w_cv_ampl,
+                                                      tolerance,
+                                                      plot_data_func,
+                                                      **kwargs)
     return data[start_inx:end_inx], clipped
 
 
-def plot_best_window(data, rate, threshold, peak_idx, trough_idx, idx0, idx1,
+def plot_best_window(data, rate, threshold,
+                     peak_idx, trough_idx, idx0, idx1,
                      win_times, cv_interv, mean_ampl, cv_ampl, clipped_frac,
-                     cost, thresh, win_idx0, win_idx1, ax):
+                     cost, thresh, win_idx0, win_idx1, axs):
     """Visualize the cost function of used for finding the best window for analysis.
 
     Pass this function as the `plot_data_func` to the `best_window_*` functions.
@@ -507,51 +516,51 @@ def plot_best_window(data, rate, threshold, peak_idx, trough_idx, idx0, idx1,
     """
     # raw data:
     time = np.arange(0.0, len(data))/rate
-    ax[0].plot(time, data, 'b', lw=3)
+    axs[0].plot(time, data, 'b', lw=3)
     if np.mean(clipped_frac[win_idx0:win_idx1]) > 0.01:
-        ax[0].plot(time[idx0:idx1], data[idx0:idx1], color='magenta', lw=3)
+        axs[0].plot(time[idx0:idx1], data[idx0:idx1], color='magenta', lw=3)
     else:
-        ax[0].plot(time[idx0:idx1], data[idx0:idx1], color='grey', lw=3)
-    ax[0].plot(time[peak_idx], data[peak_idx], 'o', mfc='red', ms=6)
-    ax[0].plot(time[trough_idx], data[trough_idx], 'o', mfc='green', ms=6)
-    ax[0].plot(time, threshold, '#CCCCCC', lw=2)
+        axs[0].plot(time[idx0:idx1], data[idx0:idx1], color='grey', lw=3)
+    axs[0].plot(time[peak_idx], data[peak_idx], 'o', mfc='red', ms=6)
+    axs[0].plot(time[trough_idx], data[trough_idx], 'o', mfc='green', ms=6)
+    axs[0].plot(time, threshold, '#CCCCCC', lw=2)
     up_lim = np.max(data) * 1.05
     down_lim = np.min(data) * .95
-    ax[0].set_ylim((down_lim, up_lim))
-    ax[0].set_ylabel('Amplitude [a.u]')
+    axs[0].set_ylim((down_lim, up_lim))
+    axs[0].set_ylabel('Amplitude [a.u]')
 
     # cv of inter-peak intervals:
-    ax[1].plot(win_times[cv_interv < 1000.0], cv_interv[cv_interv < 1000.0], 'o', ms=10, color='grey', mew=2.,
-               mec='black', alpha=0.6)
-    ax[1].plot(win_times[win_idx0:win_idx1], cv_interv[win_idx0:win_idx1], 'o', ms=10, color='red', mew=2., mec='black',
-               alpha=0.6)
-    ax[1].set_ylabel('CV intervals')
-    ax[1].set_ylim(bottom=0.0)
+    axs[1].plot(win_times[cv_interv < 1000.0], cv_interv[cv_interv < 1000.0],
+                'o', ms=10, color='grey', mew=2., mec='black', alpha=0.6)
+    axs[1].plot(win_times[win_idx0:win_idx1], cv_interv[win_idx0:win_idx1],
+                'o', ms=10, color='red', mew=2., mec='black', alpha=0.6)
+    axs[1].set_ylabel('CV intervals')
+    axs[1].set_ylim(bottom=0.0)
 
     # mean amplitude:
-    ax[2].plot(win_times[mean_ampl > 0.0], mean_ampl[mean_ampl > 0.0], 'o', ms=10, color='grey', mew=2., mec='black',
-               alpha=0.6)
-    ax[2].plot(win_times[win_idx0:win_idx1], mean_ampl[win_idx0:win_idx1], 'o', ms=10, color='red', mew=2., mec='black',
-               alpha=0.6)
-    ax[2].set_ylabel('Mean amplitude [a.u]')
-    ax[2].set_ylim(bottom=0.0)
+    axs[2].plot(win_times[mean_ampl > 0.0], mean_ampl[mean_ampl > 0.0],
+                'o', ms=10, color='grey', mew=2., mec='black', alpha=0.6)
+    axs[2].plot(win_times[win_idx0:win_idx1], mean_ampl[win_idx0:win_idx1],
+                'o', ms=10, color='red', mew=2., mec='black', alpha=0.6)
+    axs[2].set_ylabel('Mean amplitude [a.u]')
+    axs[2].set_ylim(bottom=0.0)
 
     # cv:
-    ax[3].plot(win_times[cv_ampl < 1000.0], cv_ampl[cv_ampl < 1000.0], 'o', ms=10, color='grey', mew=2., mec='black',
-               alpha=0.6)
-    ax[3].plot(win_times[win_idx0:win_idx1], cv_ampl[win_idx0:win_idx1], 'o', ms=10, color='red', mew=2., mec='black',
-               alpha=0.6)
-    ax[3].set_ylabel('CV amplitude')
-    ax[3].set_ylim(bottom=0.0)
+    axs[3].plot(win_times[cv_ampl < 1000.0], cv_ampl[cv_ampl < 1000.0],
+                'o', ms=10, color='grey', mew=2., mec='black', alpha=0.6)
+    axs[3].plot(win_times[win_idx0:win_idx1], cv_ampl[win_idx0:win_idx1],
+                'o', ms=10, color='red', mew=2., mec='black', alpha=0.6)
+    axs[3].set_ylabel('CV amplitude')
+    axs[3].set_ylim(bottom=0.0)
 
     # cost:
-    ax[4].plot(win_times[cost < thresh + 10], cost[cost < thresh + 10], 'o', ms=10, color='grey', mew=2., mec='black',
-               alpha=0.6)
-    ax[4].plot(win_times[win_idx0:win_idx1], cost[win_idx0:win_idx1], 'o', ms=10, color='red', mew=2., mec='black',
-               alpha=0.6)
-    ax[4].axhline(thresh, color='k')
-    ax[4].set_ylabel('Cost')
-    ax[4].set_xlabel('Time [sec]')
+    axs[4].plot(win_times[cost < thresh + 10], cost[cost < thresh + 10],
+                'o', ms=10, color='grey', mew=2., mec='black', alpha=0.6)
+    axs[4].plot(win_times[win_idx0:win_idx1], cost[win_idx0:win_idx1],
+                'o', ms=10, color='red', mew=2., mec='black', alpha=0.6)
+    axs[4].axhline(thresh, color='k')
+    axs[4].set_ylabel('Cost')
+    axs[4].set_xlabel('Time [sec]')
 
 
 def plot_data_window(ax, data, rate, unit, idx0, idx1, clipped,
@@ -662,7 +671,7 @@ def best_window_args(cfg):
 
         
 def analysis_window(data, rate, ampl_max, win_pos,
-                    cfg, show_bestwindow=False):
+                    cfg, plot_level=0):
     """Set clipping amplitudes and find analysis window.
 
     Parameters
@@ -678,8 +687,8 @@ def analysis_window(data, rate, ampl_max, win_pos,
         Alternatively the beginning of the analysis window in seconds.
     cfg: ConfigFile
         Configuration for clipping and best window.
-    show_bestwindow: boolean
-        If true show a plot with the best window cost functions.
+    plot_level: int
+        If larger than zero show a plot with the best window cost functions.
 
     Returns
     -------
@@ -711,16 +720,18 @@ def analysis_window(data, rate, ampl_max, win_pos,
     window_size = cfg.value('windowSize')
     if window_size <= 0.0:
         window_size = (len(data)-1)/rate
-    # show cost function:
-    if win_pos == 'best' and show_bestwindow:
-        fig, ax = plt.subplots(5, sharex=True, figsize=(14., 10.))
+    # plot cost function:
+    if win_pos == 'best' and plot_level > 0:
+        fig, axs = plt.subplots(5, 1, sharex=True, figsize=(14., 10.),
+                               layout='constrained')
+        axs[0].set_title('Best window for analysis')
         try:
             idx0, idx1, clipped = \
                 best_window_indices(data, rate,
                                     min_clip=min_clip, max_clip=max_clip,
                                     win_size=window_size,
                                     plot_data_func=plot_best_window,
-                                    ax=ax, **bwa)
+                                    axs=axs, **bwa)
             plt.show()
         except UserWarning as e:
             found_bestwindow = False
@@ -814,7 +825,8 @@ def main(data_file=None):
     #                                      plot_hist_func=plot_clipping)
 
     # setup plots:
-    fig, ax = plt.subplots(5, 1, sharex=True, figsize=(20, 12))
+    fig, axs = plt.subplots(5, 1, sharex=True, figsize=(20, 12),
+                            layout='constrained')
     fig.canvas.manager.set_window_title(title)
 
     # compute best window:
@@ -822,7 +834,7 @@ def main(data_file=None):
                         win_shift=0.5, thresh_fac=0.8, percentile=0.1,
                         min_clip=min_clip, max_clip=max_clip,
                         w_cv_ampl=10.0, tolerance=0.5,
-                        plot_data_func=plot_best_window, ax=ax)
+                        plot_data_func=plot_best_window, axs=axs)
 
     plt.tight_layout()
     plt.show()

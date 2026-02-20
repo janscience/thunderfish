@@ -44,13 +44,13 @@ from thunderlab.tabledata import TableData
 from .harmonics import fundamental_freqs_and_power
 
 
-def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
+def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
                      frate=1e6, max_harmonics=21,
-                     min_corr=0.99, min_ampl_frac=0.8,
+                     min_corr=0.99, min_ampl_frac=0.5,
                      verbose=0, plot_level=0):
     """Retrieve average EOD waveform via Fourier transform.
 
-    Fourier series are extracted for frequencies from `freq` $\\pm$
+    Fourier series are extracted for frequencies from `freq` \\(\\pm\\)
     `freq_resolution`.
 
     Parameters
@@ -64,8 +64,8 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
     freq_resolution: float
         Frequency resolution in Hertz. Ususally the resolution of the power spectrum
         from which `freq` was deduced.
-    win_fac: float
-        The snippet size is the EOD period (`1/freq`)  times `win_fac`.
+    periods: float
+        The snippet size is the EOD period (`1/freq`)  times `periods`.
     frate: float
         Sampling rate used for the waveform estimates.
     max_hamonics: int
@@ -100,7 +100,7 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
         """
         extracting wave via fourier coefficients
         """
-        twave = np.arange(0, (1 + win_fac)/freq, 1/frate)
+        twave = np.arange(0, (2 + periods)/freq, 1/frate)
         wave = np.zeros(len(twave))
         t = np.arange(len(data))/rate
         for k in range(n):
@@ -119,7 +119,6 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
                 freq = f
         return wave, freq
 
-    #plot_level = 1
     tsnippet = 2/freq_resolution   # twice as long window is essential!
     nfreqs = 5                     # twice the frequency resolution is necessary and sufficient!
     step = int(tsnippet*rate)
@@ -144,9 +143,9 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
         pidx[k] = np.argmax(waves[k][:period])
     n = np.min([len(w) for w in waves])
     f = np.min(freqs)
-    p = int((win_fac - 1)*frate/f) + 1
+    p = int(periods*frate/f) + 1
     n = min(n, p)
-    # refine waveform:
+    # refine waveform with higher harmonics:
     waves = []
     for i, f, p in zip(indices, freqs, pidx):
         w = fourier_wave(data[i:i + step], rate, f, max_harmonics, frate)
@@ -157,9 +156,10 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
                                 layout='constrained')
         axs[1, 2].set_visible(False)
         axs[0, 0].set_title(f'EODf={np.mean(freqs):.2f}Hz')
+        t = np.arange(waves.shape[1])*1000/frate
         for w in waves:
-            axs[0, 0].plot(w)
-        axs[0, 0].set_xlabel('time (indices)')
+            axs[0, 0].plot(t, w)
+        axs[0, 0].set_xlabel('time [ms]')
     # only snippets that are most similar:
     if len(waves) > 1:
         corr = np.corrcoef(waves)
@@ -184,7 +184,7 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
             axs[0, 1].set_aspect('equal')
             axs[0, 1].set_xlabel('segment')
             axs[0, 1].set_ylabel('segment')
-            plt.colorbar(m, axs[0, 2])
+            plt.colorbar(m, axs[0, 2], label='correlation coefficient')
             axs[1, 1].axhline(num_cthresh - 0.25, color='k')
             axs[1, 1].plot(np.arange(len(num_c)), num_c, '-o')
             axs[1, 1].plot(np.arange(len(num_c))[mask], num_c[mask], 'o')
@@ -195,8 +195,9 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
             axs[1, 1].yaxis.set_major_locator(plt.MultipleLocator(1))
         if verbose > 0:
             np.set_printoptions(formatter={'float': lambda x: f'{x:.2f}'})
+            eodf = np.mean(freqs) if len(freqs) > 0 else np.nan
             print()
-            print(f'extract {freq:7.2f}Hz wave  fish: min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax}, segments={len(corr)}, num_selected={np.sum(mask)}, selected={np.nonzero(mask)[0]}, EODfs={freqs}, EODf={np.mean(freqs):.2f}Hz')
+            print(f'extract {freq:7.2f}Hz wave  fish: min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax}, segments={len(corr)}, num_selected={np.sum(mask)}, selected={np.nonzero(mask)[0]}, EODfs={freqs}, EODf={eodf:.2f}Hz')
         if len(waves) == 0:
             if plot_level > 0:
                 plt.show()
@@ -215,9 +216,10 @@ def waveeod_waveform(data, rate, freq, freq_resolution, win_fac=5,
         return mean_eod, freq, indices/rate, 'ERROR: no large waveform'
     if plot_level > 0:
         axs[1, 0].set_title(f'selected EODs: EODf={np.mean(freqs):.2f}Hz')
+        t = np.arange(waves.shape[1])*1000/frate
         for w in waves:
-            axs[1, 0].plot(w)
-        axs[1, 0].set_xlabel('time (indices)')
+            axs[1, 0].plot(t, w)
+        axs[1, 0].set_xlabel('time [ms]')
         plt.show()
 
     mean_eod = np.zeros((n, 3))
