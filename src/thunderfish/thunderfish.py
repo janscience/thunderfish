@@ -285,12 +285,6 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                     df_thresh=cfg.value('frequencyThreshold'),
                     close_thresh=1*cfg.value('frequencyThreshold'),
                     min_closest=min_closest)
-        if plot_level > 0:
-            fig, ax = plt.subplots(layout='constrained')
-            ax.set_title(f'{len(wave_eodfs)} closest EOD frequencies')
-            plot_selected_groups(ax, wave_eodfs_list, wave_eodfs, wave_windows)
-            ax.set_xlabel('index of spectrum segment')
-            plt.show()
         if len(wave_windows) > 0:
             p0 = np.min(wave_windows[:, 0])
             p1 = np.max(wave_windows[:, 1])
@@ -310,6 +304,12 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                     print('  ' + ' '.join([f'{freq[0, 0]:.1f}' for freq in wave_eodfs]))
             else:
                 print('no fundamental frequencies are sufficiently close in all spectra')
+        if plot_level > 0:
+            fig, ax = plt.subplots(layout='constrained')
+            ax.set_title(f'{len(wave_eodfs)} closest EOD frequencies')
+            plot_selected_groups(ax, wave_eodfs_list, wave_eodfs, wave_windows)
+            ax.set_xlabel('index of spectrum segment')
+            plt.show()
 
     # analysis results:
     eod_props = []

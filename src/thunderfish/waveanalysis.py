@@ -143,7 +143,9 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
         freqs.append(f)
     freqs = np.array(freqs)
     mean_eod = np.zeros((0, 3))
-    # refine waveform with higher harmonics:
+    if len(freqs) == 0:
+        # TODO: Why??? How can indices be empty?
+        return mean_eod, freq, np.array([]), f'no frequencies detected ({len(indicies)} indices, freqs={freqs})'
     n = int(periods/np.mean(freqs)*frate)
     waves = np.zeros((len(indices), n))
     for k in range(len(indices)):
@@ -166,33 +168,68 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
         np.fill_diagonal(corr, 0.0)
         corr_vals = np.sort(corr[corr > min_corr])
         if len(corr_vals) == 0:
+            if plot_level > 0:
+                plt.show()
             return mean_eod, freq, indices/rate, f'waveforms not stable (max_corr={np.max(corr):.5f} SMALLER than {min_corr:.5f})'
+        # higher correlation threshold:
         min_c = corr_vals[len(corr_vals)//2]
+        # number of high correlations for each segment:
         num_c = np.sum(corr > min_c, axis=1)
         num_cmax = np.max(num_c)
-        num_cthresh = max(2, num_cmax - 2)
-        mask = num_c >= num_cthresh
+        num_cthresh = max(1, num_cmax//2)
+        # collect pairs with high correlations,
+        # to stay within a single cluster in the correlation matrix.
+        mask = []
+        # pair with maximum correlation:
+        i_max_corr = np.argmax(corr)
+        if num_c[i_max_corr//len(corr)] > num_cthresh:
+            mask.append(i_max_corr//len(corr))
+        if num_c[i_max_corr%len(corr)] > num_cthresh:
+            mask.append(i_max_corr%len(corr))
+        for k in range(len(corr)):
+            if k >= len(mask):
+                break
+            corr_col = corr[:, mask[k]]
+            idx = np.argsort(corr_col)[::-1]
+            for i in idx:
+                if corr_col[i] > min_c and num_c[i] > num_cthresh and \
+                   i not in mask:
+                    mask.append(i)
+                    break
+        # if only one was selected, add pair:
+        if len(mask) == 1:
+            mask.append(np.argmax(corr[:, mask[0]]))
+        
         waves = waves[mask]
         freqs = freqs[mask]
         indices = indices[mask]
         if plot_level > 0:
             axs[0, 1].set_title('Correlations')
-            i = np.argmax(corr)
             m = axs[0, 1].pcolormesh(corr, vmin=min_corr, vmax=1)
-            axs[0, 1].plot(i%len(corr) + 0.5, i//len(corr) + 0.5, 'ok')
-            axs[0, 1].plot(i//len(corr) + 0.5, i%len(corr) + 0.5, 'ok')
+            axs[0, 1].plot(i_max_corr%len(corr) + 0.5,
+                           i_max_corr//len(corr) + 0.5, 'ok')
+            axs[0, 1].plot(i_max_corr//len(corr) + 0.5,
+                           i_max_corr%len(corr) + 0.5, 'ok')
             axs[0, 1].set_aspect('equal')
             axs[0, 1].set_xlabel('segment')
             axs[0, 1].set_ylabel('segment')
             plt.colorbar(m, axs[0, 2], label='correlation coefficient')
-            axs[1, 1].axhline(num_cthresh - 0.25, color='k')
-            axs[1, 1].plot(np.arange(len(num_c)), num_c, '-o')
-            axs[1, 1].plot(np.arange(len(num_c))[mask], num_c[mask], 'o')
+            selected = np.zeros(len(corr))
+            selected[mask] = 1
+            axs[1, 1].axhline(num_cthresh + 0.5, color='k',
+                              label='num_cthresh')
+            axs[1, 1].plot(np.arange(len(num_c)), num_c, '-o',
+                           label='num_c')
+            axs[1, 1].plot(np.arange(len(num_c))[mask], num_c[mask], 'o',
+                           label='selected')
+            axs[1, 1].plot(np.arange(len(selected)), selected, '-o',
+                           label='mask')
             axs[1, 1].set_ylim(bottom=0)
             axs[1, 1].set_xlabel('segment')
             axs[1, 1].set_ylabel('num_c')
             axs[1, 1].xaxis.set_major_locator(plt.MultipleLocator(1))
             axs[1, 1].yaxis.set_major_locator(plt.MultipleLocator(1))
+            axs[1, 1].legend()
         if verbose > 0:
             np.set_printoptions(formatter={'float': lambda x: f'{x:.2f}'})
             eodf = np.mean(freqs) if len(freqs) > 0 else np.nan
