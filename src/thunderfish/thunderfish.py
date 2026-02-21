@@ -51,7 +51,7 @@ from .pulses import extract_pulsefish
 from .harmonics import add_psd_peak_detection_config, add_harmonic_groups_config
 from .harmonics import harmonic_groups_args, psd_peak_detection_args
 from .harmonics import harmonic_groups, closest, consistent
-from .harmonics import colors_markers, plot_harmonic_groups
+from .harmonics import colors_markers, plot_harmonic_groups, plot_selected_groups
 from .fakefish import pulsefish_spectrum
 from .pulseanalysis import analyze_pulse, plot_pulse_eods, plot_pulse_spectrum
 from .waveanalysis import waveeod_waveform, analyze_wave, plot_wave_spectrum
@@ -285,6 +285,12 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                     df_thresh=cfg.value('frequencyThreshold'),
                     close_thresh=1*cfg.value('frequencyThreshold'),
                     min_closest=min_closest)
+        if plot_level > 0:
+            fig, ax = plt.subplots(layout='constrained')
+            ax.set_title(f'{len(wave_eodfs)} closest EOD frequencies')
+            plot_selected_groups(ax, wave_eodfs_list, wave_eodfs, wave_windows)
+            ax.set_xlabel('index of spectrum segment')
+            plt.show()
         if len(wave_windows) > 0:
             p0 = np.min(wave_windows[:, 0])
             p1 = np.max(wave_windows[:, 1])
@@ -399,7 +405,7 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
         # remove wavefish below pulse fish power:
         if 'w' in mode and power_thresh is not None:
             n = len(wave_eodfs)
-            maxh = 3  # XXX make parameter
+            maxh = 3  # XXX TODO make parameter
             df = power_thresh[1,0] - power_thresh[0,0]
             for k, fish in enumerate(reversed(wave_eodfs)):
                 idx = np.array(fish[:maxh,0]//df, dtype=int)
@@ -478,6 +484,8 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                     print(f'{rstr:<7s} {props["EODf"]:7.2f}Hz wave  fish: {skips} ({msg})')
         wave_eodfs = [eodfs for idx, eodfs in zip(wave_indices, wave_eodfs) if idx > -2]
         wave_indices = np.array([idx for idx in wave_indices if idx > -2], dtype=int)
+    if verbose > 1:
+        print()
     return (power_freqs, powers, wave_eodfs, wave_indices, eod_props,
             mean_eods, spec_data, phase_data, pulseeod_data,
             power_thresh, skip_reason, zoom_window)
