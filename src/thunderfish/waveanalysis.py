@@ -130,13 +130,16 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
                 freq = f
         return wave, freq
 
+    # reduce frequency resolution and time window for high frequency fish:
+    ffac = max(1, int(np.round(freq/400)))
+    freq_resolution *= ffac
     tsnippet = 2/freq_resolution   # twice as long window is essential!
-    nfreqs = 5                     # twice the frequency resolution is necessary and sufficient!
+    nfreqs = 1 + 2*2*ffac          # twice the frequency resolution is necessary and sufficient!
     step = int(tsnippet*rate)
     # extract Fourier series from data segements:
     n = int(periods/freq*rate)
     freqs = []
-    indices = np.arange(0, len(data), step//8)
+    indices = np.arange(0, max(1, len(data) - step + 1), step//8)
     frange = np.linspace(freq - freq_resolution, freq + freq_resolution, nfreqs)
     for i in indices:
         w, f = fourier_range(data[i:i + step], rate, frange, 6, n)
@@ -233,7 +236,6 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
         if verbose > 0:
             np.set_printoptions(formatter={'float': lambda x: f'{x:.2f}'})
             eodf = np.mean(freqs) if len(freqs) > 0 else np.nan
-            print()
             print(f'extract {freq:7.2f}Hz wave  fish: min_corr={min_c:.5f}, max_corr={corr_vals[-1]:.5f}, num_cmax={num_cmax}, segments={len(corr)}, num_selected={np.sum(mask)}, selected={np.nonzero(mask)[0]}, EODfs={freqs}, EODf={eodf:.2f}Hz')
         if len(waves) == 0:
             if plot_level > 0:

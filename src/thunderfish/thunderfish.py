@@ -419,6 +419,8 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
 
     if 'w' in mode:
         # analyse EOD waveform of all wavefish:
+        if verbose > 1:
+            print()
         fish_powers = np.array([np.sum(fish[:,1]) for fish in wave_eodfs])
         power_indices = np.argsort(-fish_powers)
         wave_indices = np.zeros(len(wave_eodfs), dtype=int) - 3
@@ -460,6 +462,8 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                     print(f'skip    {props['EODf']:7.2f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB, p-p amplitude={decibel(props['p-p-amplitude']):5.1f}dB smaller than pulse fish={decibel(max_pulse_amplitude):5.1f}dB - 20dB')
                     for idx in rm_indices[1:]:
                         print(f'skip    {wave_eodfs[idx][0,0]:7.2f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB even smaller')
+                if verbose > 1:
+                    print()
                 wave_eodfs = [eodfs for idx, eodfs in enumerate(wave_eodfs)
                               if idx not in rm_indices]
                 wave_indices = np.array([idcs for idx, idcs in enumerate(wave_indices)
@@ -482,10 +486,10 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 if verbose > 0:
                     rstr = 'remove' if remove else 'skip'
                     print(f'{rstr:<7s} {props["EODf"]:7.2f}Hz wave  fish: {skips} ({msg})')
+            if verbose > 1:
+                print()
         wave_eodfs = [eodfs for idx, eodfs in zip(wave_indices, wave_eodfs) if idx > -2]
         wave_indices = np.array([idx for idx in wave_indices if idx > -2], dtype=int)
-    if verbose > 1:
-        print()
     return (power_freqs, powers, wave_eodfs, wave_indices, eod_props,
             mean_eods, spec_data, phase_data, pulseeod_data,
             power_thresh, skip_reason, zoom_window)
