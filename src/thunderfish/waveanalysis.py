@@ -95,25 +95,36 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
 
     """
 
-    @jit(nopython=True)
-    def fourier_wave(data, rate, freq, n, frate):
+    #@jit(nopython=True)
+    def fourier_wave(data, rate, freq, nh, frate, n):
         """
-        extracting wave via fourier coefficients
+        Extract wave via fourier coefficients
         """
-        twave = np.arange(0, (2 + periods)/freq, 1/frate)
-        wave = np.zeros(len(twave))
         t = np.arange(len(data))/rate
-        for k in range(n):
-            Xk = np.trapz(data*np.exp(-1j*2*np.pi*k*freq*t), t)*2/t[-1]
-            wave += np.real(Xk*np.exp(1j*2*np.pi*k*freq*twave))
+        coeffs = np.zeros(nh, dtype=complex)
+        for k in range(nh):
+            coeffs[k] = np.trapz(data*np.exp(-1j*2*np.pi*k*freq*t), t)*2/t[-1]
+        # set phase of first harmonics to zero:
+        phi0 = np.angle(coeffs[1])
+        for k in range(1, nh):
+            coeffs[k] *= np.exp(-1j*k*phi0)
+        twave = np.arange(n)/frate
+        wave = np.zeros(len(twave))
+        for k in range(nh):
+            wave += np.real(coeffs[k]*np.exp(1j*2*np.pi*k*freq*twave))
         return wave
 
-    @jit(nopython=True)
-    def fourier_range(data, rate, frange, n, frate):
+    #@jit(nopython=True)   with jit it takes longer???
+    def fourier_range(data, rate, frange, nh, n):
         wave = np.zeros(1)
         freq = 0.0
         for f in frange:
-            w = fourier_wave(data, rate, f, n, frate)
+            twave = np.arange(n)/rate
+            w = np.zeros(len(twave))
+            t = np.arange(len(data))/rate
+            for k in range(nh):
+                Xk = np.trapz(data*np.exp(-1j*2*np.pi*k*f*t), t)*2/t[-1]
+                w += np.real(Xk*np.exp(1j*2*np.pi*k*f*twave))
             if np.max(w) - np.min(w) > np.max(wave) - np.min(wave):
                 wave = w
                 freq = f
@@ -123,34 +134,23 @@ def waveeod_waveform(data, rate, freq, freq_resolution, periods=5,
     nfreqs = 5                     # twice the frequency resolution is necessary and sufficient!
     step = int(tsnippet*rate)
     # extract Fourier series from data segements:
-    waves = []
+    n = int(periods/freq*rate)
     freqs = []
-    indices = []
+    indices = np.arange(0, len(data), step//8)
     frange = np.linspace(freq - freq_resolution, freq + freq_resolution, nfreqs)
-    for i in range(0, len(data), step//8):
-        w, f = fourier_range(data[i:i + step], rate, frange, 6, frate)
-        waves.append(w)
+    for i in indices:
+        w, f = fourier_range(data[i:i + step], rate, frange, 6, n)
         freqs.append(f)
-        indices.append(i)
-    eod_freq = np.mean(freqs)
-    mean_eod = np.zeros((0, 3))
     freqs = np.array(freqs)
-    indices = np.array(indices)
-    # cut all waves to same length starting at maximum:
-    pidx = np.zeros(len(waves), dtype=int)
-    for k in range(len(waves)):
-        period = int(np.ceil(frate/freqs[k]))
-        pidx[k] = np.argmax(waves[k][:period])
-    n = np.min([len(w) for w in waves])
-    f = np.min(freqs)
-    p = int(periods*frate/f) + 1
-    n = min(n, p)
+    mean_eod = np.zeros((0, 3))
     # refine waveform with higher harmonics:
-    waves = []
-    for i, f, p in zip(indices, freqs, pidx):
-        w = fourier_wave(data[i:i + step], rate, f, max_harmonics, frate)
-        waves.append(w[p:p + n])
-    waves = np.array(waves)
+    n = int(periods/np.mean(freqs)*frate)
+    waves = np.zeros((len(indices), n))
+    for k in range(len(indices)):
+        i = indices[k]
+        w = fourier_wave(data[i:i + step], rate, freqs[k],
+                         max_harmonics, frate, n)
+        waves[k] = w
     if plot_level > 0:
         fig, axs = plt.subplots(2, 3, width_ratios=[8, 8, 1],
                                 layout='constrained')
