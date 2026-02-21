@@ -1674,7 +1674,7 @@ def main(cargs=None):
     parser.add_argument('-P', dest='save_subplots', default='', type=str, metavar='rtpwsed',
                         help='show or save subplots separately: r) recording with analysis window, t) data trace with detected pulse fish, p) power spectrum with detected wave fish, w/W) mean EOD waveform, s/S) EOD spectrum, e/E) EOD waveform and spectra, d) the default summary plot. Capital letters produce a single multipage pdf containing plots of all detected fish')
     parser.add_argument('--title', default='{species}{name}{chanstr}{time}', type=str,
-                        help='title string for plots with fields {path}, {basename}, {species}, {channel}, {chanstr}, and {time}')
+                        help='title string for plots with fields {path}, {part1}, {part2}, ..., {basename}, {species}, {channel}, {chanstr}, and {time}')
     parser.add_argument('-d', dest='rawdata_path', default='.', type=str, metavar='PATH',
                         help='path to raw EOD recordings needed for plotting based on analysis results')
     parser.add_argument('-j', dest='jobs', nargs='?', type=int, default=None, const=0,
