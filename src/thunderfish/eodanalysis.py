@@ -328,50 +328,52 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                              power_freqs[1], verbose=verbose - 1,
                              plot_level=plot_level,
                              **extract_wave_args(cfg))
-            if len(mean_eod) > 0 and len(eskips) == 0:
-                for h in range(len(fish)):
-                    fish[h, 0] = (h + 1)*eod_freq
-                unfilter_cutoff = cfg.value('unfilterCutoff')
-                if unfilter_cutoff:
-                    coeffs = unfilter_coeff(eod_freq, coeffs, unfilter_cutoff)
-                    if plot_level > 0:
-                        w = fourier_synthesis(eod_freq, coeffs,
-                                              1/mean_eod[1, 0], len(mean_eod))
-                        fig, ax = plt.subplots(layout='constrained')
-                        ax.set_title(f'EODf={eod_freq:.1f}Hz, unfilter high-pass filter $f_{{cutoff}}={unfilter_cutoff:.0f}$Hz')
-                        ax.plot(1000*mean_eod[:, 0], mean_eod[:, 1],
-                                label='original')
-                        ax.plot(1000*mean_eod[:, 0], w, label='unfiltered')
-                        ax.set_xlabel('time [ms]')
-                        ax.legend()
-                        plt.show()
-                mean_eod, props, phases, sdata = \
-                    analyze_wave(mean_eod, None, fish, coeffs,
-                                 **analyze_wave_args(cfg))
-                eod_times = np.arange(i0/rate, i1/rate, 1/fish[0, 0])
-                clipped_frac = clipped_fraction(data[i0:i1], rate, eod_times,
-                                                mean_eod, min_clip, max_clip)
-                props['n'] = n_eods
-                props['nsegments'] = len(times)
-                props['index'] = len(eod_props)
-                props['clipped'] = clipped_frac
-                props['samplerate'] = rate
-                props['nfft'] = nfft
-                props['dfreq'] = dfreq
-                # remove wave fish that are smaller than the largest pulse fish:
-                if props['ppampl'] < 0.01*max_pulse_amplitude:
-                    rm_indices = power_indices[k:]
-                    if verbose > 0:
-                        print(f'skip    {props['EODf']:7.2f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB, p-p amplitude={decibel(props['ppampl']):5.1f}dB smaller than pulse fish={decibel(max_pulse_amplitude):5.1f}dB - 20dB')
-                        for idx in rm_indices[1:]:
-                            print(f'skip    {wave_eodfs[idx][0,0]:7.2f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB even smaller')
-                    if verbose > 1:
-                        print()
-                    wave_eodfs = [eodfs for idx, eodfs in enumerate(wave_eodfs)
-                                  if idx not in rm_indices]
-                    wave_indices = np.array([idcs for idx, idcs in enumerate(wave_indices)
-                                            if idx not in rm_indices], dtype=int)
-                    break
+            if len(mean_eod) == 0 or len(eskips) > 0:
+                # waveform extraction failed
+                continue
+            for h in range(len(fish)):
+                fish[h, 0] = (h + 1)*eod_freq
+            unfilter_cutoff = cfg.value('unfilterCutoff')
+            if unfilter_cutoff:
+                coeffs = unfilter_coeff(eod_freq, coeffs, unfilter_cutoff)
+                if plot_level > 0:
+                    w = fourier_synthesis(eod_freq, coeffs,
+                                          1/mean_eod[1, 0], len(mean_eod))
+                    fig, ax = plt.subplots(layout='constrained')
+                    ax.set_title(f'EODf={eod_freq:.1f}Hz, unfilter high-pass filter $f_{{cutoff}}={unfilter_cutoff:.0f}$Hz')
+                    ax.plot(1000*mean_eod[:, 0], mean_eod[:, 1],
+                            label='original')
+                    ax.plot(1000*mean_eod[:, 0], w, label='unfiltered')
+                    ax.set_xlabel('time [ms]')
+                    ax.legend()
+                    plt.show()
+            mean_eod, props, phases, sdata = \
+                analyze_wave(mean_eod, None, fish, coeffs,
+                             **analyze_wave_args(cfg))
+            eod_times = np.arange(i0/rate, i1/rate, 1/fish[0, 0])
+            clipped_frac = clipped_fraction(data[i0:i1], rate, eod_times,
+                                            mean_eod, min_clip, max_clip)
+            props['n'] = n_eods
+            props['nsegments'] = len(times)
+            props['index'] = len(eod_props)
+            props['clipped'] = clipped_frac
+            props['samplerate'] = rate
+            props['nfft'] = nfft
+            props['dfreq'] = dfreq
+            # remove wave fish that are smaller than the largest pulse fish:
+            if props['ppampl'] < 0.01*max_pulse_amplitude:
+                rm_indices = power_indices[k:]
+                if verbose > 0:
+                    print(f'skip    {props['EODf']:7.2f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB, p-p amplitude={decibel(props['ppampl']):5.1f}dB smaller than pulse fish={decibel(max_pulse_amplitude):5.1f}dB - 20dB')
+                    for idx in rm_indices[1:]:
+                        print(f'skip    {wave_eodfs[idx][0,0]:7.2f}Hz wave  fish: power={decibel(fish_powers[idx]):5.1f}dB even smaller')
+                if verbose > 1:
+                    print()
+                wave_eodfs = [eodfs for idx, eodfs in enumerate(wave_eodfs)
+                              if idx not in rm_indices]
+                wave_indices = np.array([idcs for idx, idcs in enumerate(wave_indices)
+                                        if idx not in rm_indices], dtype=int)
+                break
             # add good waveforms only:
             remove, skips, msg = wave_quality(props, sdata[1:, 3],
                                               **wave_quality_args(cfg))
