@@ -82,7 +82,7 @@ def test_plotfish():
             plt.close()
     for j in range(10):
         fig, ax = plt.subplots()
-        fs.plot_object(ax, pos=np.random.randn(2)*5, radius=np.random.rand(1)*5.0+0.1)
+        fs.plot_object(ax, pos=np.random.randn(2)*5, radius=np.random.rand()*5.0+0.1)
         plt.close()
 
 
