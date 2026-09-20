@@ -88,6 +88,11 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 min_clip, max_clip, name, mode, verbose, plot_level, cfg):
     """Detect EODs of all fish present in the data.
 
+    This is meant to detect EODs in short (many seconds) recordings,
+    like for example with the fishfinder or dedicated head-tail
+    measurements. The assumption is that the EOD of every fish is
+    stable in amplitude and discharge rate within the data.
+
     Parameters
     ----------
     data: array of floats
@@ -180,11 +185,11 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 else:
                     print('  none')
             wave_eodfs_list.append(wave_eodfs)
-        min_closest = (len(wave_eodfs_list) + 1) // 2
+        min_closest = max(1, (len(wave_eodfs_list) + 1) // 3)
+        freq_thresh = cfg.value('frequencyThreshold')
         wave_eodfs, wave_windows = \
             closest(wave_eodfs_list,
-                    df_thresh=cfg.value('frequencyThreshold'),
-                    close_thresh=1*cfg.value('frequencyThreshold'),
+                    df_thresh=freq_thresh, close_thresh=1*freq_thresh,
                     min_closest=min_closest)
         if len(wave_windows) > 0:
             p0 = np.min(wave_windows[:, 0])
@@ -263,7 +268,8 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
             props['dfreq'] = dfreq
 
             # add good waveforms only:
-            skips, msg, skipped_clipped = pulse_quality(props, **pulse_quality_args(cfg))
+            skips, msg, skipped_clipped = \
+                pulse_quality(props, **pulse_quality_args(cfg))
 
             if len(skips) == 0:
                 eod_props.append(props)

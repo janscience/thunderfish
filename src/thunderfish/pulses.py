@@ -409,7 +409,8 @@ def extract_pulsefish(data, rate, frate=0.5e6, width_factor_shape=3,
         clusters, mf_log_dict = \
           delete_moving_fish(clusters, x_merge/i_rate, len(data)/rate,
                              eod_heights, eod_widths/i_rate, i_rate,
-                             verbose=verbose, return_data='moving_fish' in return_data)
+                             verbose=verbose,
+                             return_data='moving_fish' in return_data)
         
         if 'moving_fish' in return_data:
             log_dict['moving_fish'] = mf_log_dict
@@ -973,13 +974,10 @@ def cluster(data, rate, eod_xp, eod_xt, eod_heights, eod_widths,
             max_label_t = max(np.max(wt_labels), np.max(all_t_labels)) + 1
 
         if verbose > 0:
-            print(f'  clusters generated based on EOD shape in width cluster {width_label}:')            
-            if np.max(wp_labels) == -1:
-                print(f'    none')
-            else:
-                unique_clusters = np.unique(wp_labels[wp_labels != -1])
-                print(f'    num={len(unique_clusters):2d} different EOD shapes:',
-                      str(unique_clusters).strip('[]'))
+            unique_clusters = np.unique(width_label[width_label != -1])
+            print(f'  clusters generated based on EOD shape in width cluster {width_label}: {len(unique_clusters):2d}')
+            for l in unique_clusters:
+                print(f'    {l:2d}: num={len(wp_labels[wp_labels == l]):5d}')
         
         if 'all_cluster_steps' in return_data:
             all_shapelabels.append(shape_labels)
@@ -1085,8 +1083,9 @@ def cluster(data, rate, eod_xp, eod_xt, eod_heights, eod_widths,
                                            (all_p_labels+all_t_labels))))
 
     if verbose > 0:
-        print('clusters generated based on height, width and shape: ')
-        for l in np.unique(all_clusters[all_clusters != -1]):
+        unique_clusters = np.unique(all_clusters[all_clusters != -1])
+        print(f'clusters generated based on height, width and shape: {len(unique_clusters)}')
+        for l in unique_clusters:
             print(f'  {l:2d}: num={len(all_clusters[all_clusters == l]):5d}')
              
     return all_clusters, x_merge, saved_data
@@ -1667,18 +1666,16 @@ def delete_wavefish_and_sidepeaks(data, clusters, eod_x, eod_widths,
         mean_eod = np.mean(snippets, axis=0)
         mean_eod = mean_eod - np.mean(mean_eod)
 
-        # detect peaks and troughs on data + some maxima/minima at the
-        # end, so that the sides are also considered for peak detection:
+        # detect peaks and troughs on data:
         thresh = np.std(mean_eod)
-        peod = np.array(mean_eod)
-        peod[0] += 2*thresh
-        peod[-1] -= 2*thresh
-        pk, tr = detect_peaks(peod, thresh)
-        pk = pk[(pk > 0) & (pk < len(peod))]
-        tr = tr[(tr > 0) & (tr < len(peod))]
+        mean_eod[0] += 2*thresh
+        mean_eod[-1] -= 2*thresh
+        pk, tr = detect_peaks(mean_eod, thresh)
+        pk = pk[(pk > 0) & (pk < len(mean_eod))]
+        tr = tr[(tr > 0) & (tr < len(mean_eod))]
 
-        # no peaks or troughs:
-        if len(pk) == 0 or len(tr) == 0:
+        # not enough peaks or troughs:
+        if len(pk) <= 1 or len(tr) <= 1:
             return mask_wave, mask_sidepeak, sdict
 
         idxs = np.sort(np.concatenate((pk, tr)))
@@ -1691,23 +1688,22 @@ def delete_wavefish_and_sidepeaks(data, clusters, eod_x, eod_widths,
                 print(f'delete cluster {cluster}, which is a sidepeak')
             mask_sidepeak[clusters == cluster] = True
 
-
         # compute all height differences of peaks and troughs within snippets.
         # if they are all similar, it is probably noise or a wavefish.
         h_diffs = np.diff(mean_eod[idxs])   # TODO: almost the same as slopes!
         w_diffs = np.diff(idxs)
 
         #if np.abs(np.diff(idxs[max_slope:max_slope + 2])) < np.mean(eod_widths[clusters == cluster])*0.5 or len(pk) + len(tr)>max_phases or np.min(w_diffs)>2*cutwidth/width_fac: #or len(h_diffs[np.abs(h_diffs)>0.5*(np.max(mean_eod)-np.min(mean_eod))])>max_phases:
-        if w_diffs[max_slope:max_slope + 2][0] < np.mean(eod_widths[clusters == cluster])*0.5 or len(idxs) > max_phases or np.min(w_diffs) > 2*cutwidth/width_fac: #or len(h_diffs[np.abs(h_diffs)>0.5*(np.max(mean_eod)-np.min(mean_eod))])>max_phases:  # Jan
+        if w_diffs[max_slope] < np.mean(eod_widths[clusters == cluster])/2 or len(idxs) > max_phases or np.min(w_diffs) > 2*cutwidth/width_fac: #or len(h_diffs[np.abs(h_diffs)>0.5*(np.max(mean_eod)-np.min(mean_eod))])>max_phases:  # Jan
             if verbose > 0:
                 print(f'delete cluster {cluster}, which is a wavefish')
             mask_wave[clusters == cluster] = True
 
-        if 'vals_%d' % cluster in sdict:
-            sdict['vals_%d' % cluster].append([mean_eod, [pk, tr],
-                                               idxs[max_slope:max_slope + 2]])
-            sdict['mask_%d' % cluster].append(any(mask_wave[clusters == cluster]))
-            sdict['mask_%d' % cluster].append(any(mask_sidepeak[clusters == cluster]))
+        if f'vals_{cluster}' in sdict:
+            sdict[f'vals_{cluster}'].append([mean_eod, [pk, tr],
+                                            idxs[max_slope:max_slope + 2]])
+            sdict[f'mask_{cluster}'].append(any(mask_wave[clusters == cluster]))
+            sdict[f'mask_{cluster}'].append(any(mask_sidepeak[clusters == cluster]))
 
     return mask_wave, mask_sidepeak, sdict
 
@@ -1993,9 +1989,9 @@ def delete_moving_fish(clusters, eod_t, T, eod_heights, eod_widths,
     ev_num = 0
     for iw, w in enumerate(np.unique(width_classes[clusters >= 0])):
         # initialize variables
-        min_clusters = 100
+        min_clusters = 10000
         average_height = 0
-        sparse_clusters = 100
+        sparse_clusters = 10000
         keep_clusters = []
 
         dt = max(min_dt, np.median(eod_widths[width_classes == w])*sliding_window_factor)
@@ -2007,54 +2003,57 @@ def delete_moving_fish(clusters, eod_t, T, eod_heights, eod_widths,
         weod_heights = eod_heights[width_classes == w]
         weod_widths = eod_widths[width_classes == w]
 
-        if verbose > 0:
-            print('sliding window dt = %f'%dt)
+        if verbose > 1:
+            print(f'moving_fish: sliding window dt = {dt:.3f}s')
         
         x = np.arange(0, T - dt + stepsize, stepsize)
         y = np.ones(len(x), dtype=int)
 
-        # make W dependent on width??
-        ignore_steps = np.zeros(len(x), dtype=int)
+        if len(x) == 0:
+            keep_clusters.append(np.unique(wclusters))
+        else:
+            # make W dependent on width??
+            ignore_steps = np.zeros(len(x), dtype=int)
 
-        for i, t in enumerate(x):
-            current_clusters = wclusters[(weod_t>=t)&(weod_t<t+dt)&(wclusters!=-1)]
-            if len(np.unique(current_clusters)) == 0:
-                ignore_steps[i-int(dt/stepsize):i+int(dt/stepsize)] = 1
-                if verbose > 0:
-                    print('No pulsefish in recording at T=%.2f:%.2f' % (t, t+dt))
+            for i, t in enumerate(x):
+                current_clusters = wclusters[(weod_t>=t)&(weod_t<t+dt)&(wclusters!=-1)]
+                if len(np.unique(current_clusters)) == 0:
+                    ignore_steps[i-int(dt/stepsize):i+int(dt/stepsize)] = 1
+                    if verbose > 0:
+                        print(f'moving fish: no pulsefish in recording at T={t:.2f}:{t + dt:.2f}')
 
-        running_sum = np.ones(len(x), dtype=int)
-        ulabs = np.unique(wclusters[wclusters>=0])
+            running_sum = np.ones(len(x), dtype=int)
+            ulabs = np.unique(wclusters[wclusters>=0])
 
-        # sliding window
-        for j, (t, ignore_step) in enumerate(zip(x, ignore_steps)):
-            current_clusters = wclusters[(weod_t>=t)&(weod_t<t+dt)&(wclusters!=-1)]
-            current_widths = weod_widths[(weod_t>=t)&(weod_t<t+dt)&(wclusters!=-1)]
+            # sliding window
+            for j, (t, ignore_step) in enumerate(zip(x, ignore_steps)):
+                current_clusters = wclusters[(weod_t >= t) & (weod_t < t+dt) & (wclusters != -1)]
+                current_widths = weod_widths[(weod_t >= t) & (weod_t < t+dt) & (wclusters != -1)]
 
-            unique_clusters = np.unique(current_clusters)
-            y[j] = len(unique_clusters)
+                unique_clusters = np.unique(current_clusters)
+                y[j] = len(unique_clusters)
 
-            if (len(unique_clusters) <= min_clusters) and \
-              (ignore_step == 0) and \
-              (len(unique_clusters !=1)):
+                if (len(unique_clusters) <= min_clusters) and \
+                  (ignore_step == 0) and \
+                  (len(unique_clusters != 1)):
 
-                current_labels = np.isin(wclusters, unique_clusters)
-                current_height = np.mean(weod_heights[current_labels])
+                    current_labels = np.isin(wclusters, unique_clusters)
+                    current_height = np.mean(weod_heights[current_labels])
 
-                # compute nr of clusters that are too sparse
-                clusters_after_deletion = np.unique(remove_sparse_detections(np.copy(clusters[np.isin(clusters, unique_clusters)]), rate*eod_widths[np.isin(clusters, unique_clusters)], rate, T))
-                current_sparse_clusters = len(unique_clusters) - len(clusters_after_deletion[clusters_after_deletion!=-1])
-               
-                if current_sparse_clusters <= sparse_clusters and \
-                  ((current_sparse_clusters<sparse_clusters) or
-                   (current_height > average_height) or
-                   (len(unique_clusters) < min_clusters)):
-                    
-                    keep_clusters = unique_clusters
-                    min_clusters = len(unique_clusters)
-                    average_height = current_height
-                    window_end = t+dt
-                    sparse_clusters = current_sparse_clusters
+                    # compute nr of clusters that are too sparse:
+                    clusters_after_deletion = np.unique(remove_sparse_detections(np.copy(clusters[np.isin(clusters, unique_clusters)]), rate*eod_widths[np.isin(clusters, unique_clusters)], rate, T))
+                    current_sparse_clusters = len(unique_clusters) - len(clusters_after_deletion[clusters_after_deletion != -1])
+
+                    if current_sparse_clusters <= sparse_clusters and \
+                      ((current_sparse_clusters < sparse_clusters) or
+                       (current_height > average_height) or
+                       (len(unique_clusters) < min_clusters)):
+
+                        keep_clusters = unique_clusters
+                        min_clusters = len(unique_clusters)
+                        average_height = current_height
+                        window_end = t+dt
+                        sparse_clusters = current_sparse_clusters
 
         all_keep_clusters.append(keep_clusters)
         
@@ -2076,11 +2075,10 @@ def delete_moving_fish(clusters, eod_t, T, eod_heights, eod_widths,
                 mf_dict['fishcount'] = [[x+0.5*(x[1]-x[0]), y]]
                 mf_dict['ignore_steps'] = [ignore_steps]
 
-    if verbose > 0:
-        print('Estimated nr of pulsefish in recording: %i'%len(all_keep_clusters))
-
-    # delete all clusters that are not selected
+    # delete all clusters that are not selected:
     clusters[np.invert(np.isin(clusters, np.concatenate(all_keep_clusters)))] = -1
+    if verbose > 0:
+        print(f'moving fish: estimated number of pulsefish: {len(np.unique(clusters[clusters != -1]))}')
     
     return clusters, mf_dict
 
@@ -2110,13 +2108,12 @@ def remove_sparse_detections(clusters, eod_widths, rate, T,
         Cluster labels, where sparse clusters have been set to -1.
     """
     for c in np.unique(clusters):
-        if c!=-1:
-
-            n = len(clusters[clusters == c])
-            w = np.median(eod_widths[clusters == c])/rate
-
-            if n*w < T*min_density:
-                if verbose > 0:
-                    print('cluster %i is too sparse'%c)
-                clusters[clusters == c] = -1
+        if c == -1:
+            continue
+        n = len(clusters[clusters == c])
+        w = np.median(eod_widths[clusters == c])/rate
+        if n*w < T*min_density:
+            if verbose > 0:
+                print('removed cluster {c:2d}: median coverage of {n*w:.2f}s is less than {100*min_density:.1f}% of data')
+            clusters[clusters == c] = -1
     return clusters
