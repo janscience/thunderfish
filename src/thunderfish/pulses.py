@@ -2048,14 +2048,13 @@ def delete_moving_fish(clusters, eod_t, T, eod_heights, eod_widths,
                       ((current_sparse_clusters < sparse_clusters) or
                        (current_height > average_height) or
                        (len(unique_clusters) < min_clusters)):
-
-                        keep_clusters = unique_clusters
+                        keep_clusters = [unique_clusters]
                         min_clusters = len(unique_clusters)
                         average_height = current_height
                         window_end = t+dt
                         sparse_clusters = current_sparse_clusters
 
-        all_keep_clusters.append(keep_clusters)
+        all_keep_clusters.extend(keep_clusters)
         
         if return_data:
             if 'w' in mf_dict:
