@@ -68,38 +68,38 @@ def abbrv_genus(name):
 
 # EODs of various wavefish species:
 
-Sine_harmonics = dict(amplitudes=(1.0,), phases=(0.5*np.pi,),
+Sine_harmonics = dict(amplitudes=(1.0,), phases=(-0.5*np.pi,),
                       species='Sinewave')
 
 Apteronotus_leptorhynchus_harmonics = \
     dict(amplitudes=(0.90062, 0.15311, 0.072049, 0.012609, 0.011708),
-         phases=(1.3623, 2.3246, 0.9869, 2.6492, -2.6885),
+         phases=(-0.20850, 0.75380, -0.58390, 1.07840, -4.25930),
          species='Apteronotus leptorhynchus')
 
 Apteronotus_rostratus_harmonics = \
     dict(amplitudes=(0.64707, 0.43874, 0.063592, 0.07379, 0.040199, 0.023073,
                      0.0097678),
-         phases=(2.2988, 0.78876, -1.316, 2.2416, 2.0413, 1.1022,
-                 -2.0513),
+         phases=(0.72800, -0.78204, -2.88680, 0.67080, 0.47050, -0.46860,
+                 -3.62210),
          species='Apteronotus rostratus')
 
 Eigenmannia_harmonics = \
     dict(amplitudes=(1.0087, 0.23201, 0.060524, 0.020175, 0.010087, 0.0080699),
-         phases=(1.3414, 1.3228, 2.9242, 2.8157, 2.6871, -2.8415),
+         phases=(-0.22940, -0.24800, 1.35340, 1.24490, 1.11630, -4.41230),
          species='Eigenmannia')
 
 Sternarchella_terminalis_harmonics = \
     dict(amplitudes=(0.11457, 0.4401, 0.41055, 0.20132, 0.061364, 0.011389,
                      0.0057985),
-         phases=(-2.7106, 2.4472, 1.6829, 0.79085, 0.119, -0.82355,
-                 -1.9956),
+         phases=(-4.28140, 0.87640, 0.11210, -0.77995, -1.45180, -2.39435,
+                 -3.56640),
          species='Sternarchella terminalis')
 
 Sternopygus_dariensis_harmonics = \
     dict(amplitudes=(0.98843, 0.41228, 0.047848, 0.11048, 0.022801, 0.030706,
                      0.019018),
-         phases=(1.4153, 1.3141, 3.1062, -2.3961, -1.9524, 0.54321,
-                 1.6844),
+         phases=(-0.15550, -0.25670, 1.53540, -3.96690, -3.52320, -1.02759,
+                 0.11360),
          species='Sternopygus dariensis')
 
 wavefish_harmonics = dict(Sine=Sine_harmonics,
@@ -125,7 +125,10 @@ def wavefish_spectrum(fish):
         If 2-D array, as returned from waveanalysis.analyse_wave(),
         then take relative amplitudes from third column and phases
         from fifth colum.
-        If 1-D array of complex, take the coefficients as is.
+        If 1-D array of complex, take the coefficients as is with the
+        first one being the offset.
+        In all other formats, the first element is the amplitude and first of
+        the fundamental frequency.
 
     Returns
     -------
@@ -200,7 +203,10 @@ def wavefish_eods(fish='Eigenmannia', frequency=100.0, rate=44100.0,
         If 2-D array, as returned from waveanalysis.analyse_wave(),
         then take relative amplitudes from third column and phases
         from fifth colum.
-        If 1-D array of complex, take the coefficients as is.
+        If 1-D array of complex, take the coefficients as is with the
+        first one being the offset.
+        In all other formats, the first element is the amplitude and first of
+        the fundamental frequency.
     frequency: float or array of floats
         EOD frequency of the fish in Hertz. Either fixed number or array for
         time-dependent frequencies.
@@ -263,7 +269,10 @@ def normalize_wavefish(fish, mode='peak'):
         If 2-D array, as returned from waveanalysis.analyse_wave(),
         then take relative amplitudes from third column and phases
         from fifth colum.
-        If 1-D array of complex, take the coefficients as is.
+        If 1-D array of complex, take the coefficients as is with the
+        first one being the offset.
+        In all other formats, the first element is the amplitude and first of
+        the fundamental frequency.
     mode: 'peak' or 'zero'
         How to normalize amplitude and phases:
         - 'peak': normalize waveform to a peak-to-peak amplitude of two
@@ -314,7 +323,10 @@ def export_wavefish(fish, name='Unknown_harmonics', species='', file=None):
         If 2-D array, as returned from waveanalysis.analyse_wave(),
         then take relative amplitudes from third column and phases
         from fifth colum.
-        If 1-D array of complex, take the coefficients as is.
+        If 1-D array of complex, take the coefficients as is with the
+        first one being the offset.
+        In all other formats, the first element is the amplitude and first of
+        the fundamental frequency.
     name: str
         Name of the dictionary to be written. If empty take species name.
     species: str
