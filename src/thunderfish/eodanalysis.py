@@ -50,6 +50,7 @@ Analyse EOD waveforms.
 import os
 import io
 import numpy as np
+import matplotlib.pyplot as plt
 
 from pathlib import Path
 from zipfile import ZipFile
@@ -66,6 +67,7 @@ from .fakefish import normalize_pulsefish, export_pulsefish
 from .fakefish import normalize_wavefish, export_wavefish
 from .harmonics import harmonic_groups_args, psd_peak_detection_args
 from .harmonics import harmonic_groups, closest, consistent
+from .harmonics import plot_selected_groups
 from .pulses import extract_pulsefish
 from .pulseanalysis import analyze_pulse, analyze_pulse_args
 from .pulseanalysis import pulsetrain_spectrum
