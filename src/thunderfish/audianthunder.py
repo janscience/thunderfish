@@ -77,14 +77,14 @@ class TimePlot():
             self.zoomed_time_range = None
         self.canvas.draw()
 
-    def zoom_in(self):
+    def zoom_time_in(self):
         t0, t1 = self.ax.get_xlim()
         if (t1 - t0)/self.tfac > 0.001:
             t1 = t0 + 0.5*(t1 - t0)
             self.ax.set_xlim(t0, t1)
             self.canvas.draw()
 
-    def zoom_out(self):
+    def zoom_time_out(self):
         t0, t1 = self.ax.get_xlim()
         if t1 < self.full_time_range[1]:
             t1 = t0 + 2*(t1 - t0)
@@ -126,7 +126,7 @@ class TimePlot():
             t1 = self.full_time_range[1]
             self.ax.set_xlim(t1 - dt, t1)
             self.canvas.draw()                
-
+            
 
 class TracePlot(TimePlot):
     
@@ -143,8 +143,26 @@ class TracePlot(TimePlot):
                             frameon=True, loc='upper right')
         zoom_eod_recording(self.ax, eod_props, data, self.rate,
                            twidth, self.tfac, time[0])
+        x0, x1 = self.ax.get_ylim()
+        self.max_ampl = max(abs(x0), abs(x1))
         if self.ax.get_legend() is not None:
             self.ax.get_legend().get_frame().set_color('white')
+
+    def zoom_ampl_in(self):
+        x0, x1 = self.ax.get_ylim()
+        dx = max(abs(x0), abs(x1))
+        if dx/2 < 1e-5*self.max_ampl:
+            dx = 2e-5*self.max_ampl
+        self.ax.set_ylim(-dx/2, dx/2)
+        self.canvas.draw()                
+
+    def zoom_ampl_out(self):
+        x0, x1 = self.ax.get_ylim()
+        dx = max(abs(x0), abs(x1))
+        if 2*dx > self.max_ampl:
+            dx = self.max_ampl/2
+        self.ax.set_ylim(-2*dx, 2*dx)
+        self.canvas.draw()                
 
 
 class RatePlot(TimePlot):
@@ -153,8 +171,24 @@ class RatePlot(TimePlot):
         super().__init__(time)
         plot_pulse_rate(self.ax, eod_props, toffs=self.full_time_range[0],
                         colors=pulse_colors, markers=pulse_markers)
+        _, self.max_rate = self.ax.get_ylim()
         if self.ax.get_legend() is not None:
             self.ax.get_legend().get_frame().set_color('white')
+
+    def zoom_rate_in(self):
+        x0, x1 = self.ax.get_ylim()
+        dx = max(10, x1 - x0)
+        self.ax.set_ylim(x0, x0 + dx/2)
+        self.canvas.draw()                
+
+    def zoom_rate_out(self):
+        x0, x1 = self.ax.get_ylim()
+        dx = x1 - x0
+        if x0 + 2*dx > 2*self.max_rate:
+            self.ax.set_ylim(x0, 2*self.max_rate)
+        else:
+            self.ax.set_ylim(x0, x0 + 2*dx)
+        self.canvas.draw()                
             
         
 class PowerPlot():
@@ -201,6 +235,21 @@ class PowerPlot():
                          log_freq=False, min_freq=0, max_freq=3000,
                          ymarg=5.0, sstyle=spectrum_style)
         self.ax.yaxis.set_major_locator(plt.MaxNLocator(6))
+
+    def zoom_freq_in(self):
+        x0, x1 = self.ax.get_xlim()
+        dx = max(10, x1 - x0)
+        self.ax.set_xlim(x0, x0 + dx/2)
+        self.canvas.draw()                
+
+    def zoom_freq_out(self):
+        x0, x1 = self.ax.get_xlim()
+        dx = x1 - x0
+        if x0 + 2*dx > self.power_freqs[-1]:
+            self.ax.set_xlim(x0, self.power_freqs[-1])
+        else:
+            self.ax.set_xlim(x0, x0 + 2*dx)
+        self.canvas.draw()                
         
     def onpick(self, event):
         self.clear()
@@ -427,7 +476,13 @@ class ThunderfishDialog(QDialog):
         self.tabs.setMovable(True)
         self.tabs.setTabsClosable(False)
         self.trace_acts = []
+        self.rate_acts = []
+        self.trace_rate_acts = []
+        self.spec_acts = []
         self.tabs.currentChanged.connect(self.toggle_trace)
+        self.tabs.currentChanged.connect(self.toggle_rate)
+        self.tabs.currentChanged.connect(self.toggle_trace_rate)
+        self.tabs.currentChanged.connect(self.toggle_spec)
         vbox.addWidget(self.tabs)
 
         # log messages:
@@ -463,11 +518,11 @@ class ThunderfishDialog(QDialog):
             self.rate_idx = None
 
         # tab with power spectrum:
-        self.power_plot = PowerPlot(power_freqs, powers, power_thresh,
+        self.spec_plot = PowerPlot(power_freqs, powers, power_thresh,
                                     self.wave_eodfs, self.wave_indices,
                                     self.wave_colors, self.wave_markers)
-        self.navis.append(self.power_plot.navi)
-        self.spec_idx = self.tabs.addTab(self.power_plot.canvas, 'Spectrum')
+        self.navis.append(self.spec_plot.navi)
+        self.spec_idx = self.tabs.addTab(self.spec_plot.canvas, 'Spectrum')
 
         # tab with frequencies:
         if len(self.eodfs) > 1:
@@ -593,15 +648,27 @@ class ThunderfishDialog(QDialog):
         for n in self.navis:
             n.pan()
 
+    def toggle_trace(self, index):
+        for act in self.trace_acts:
+            act.setEnabled(index == self.trace_idx)
+
+    def toggle_rate(self, index):
+        for act in self.rate_acts:
+            act.setEnabled(index == self.rate_idx)
+
     def dispatch_trace(self, func):
         if self.tabs.currentIndex() in [self.trace_idx, self.rate_idx]:
             getattr(self.trace_plot, func)()
             if self.rate_plot is not None:
                 getattr(self.rate_plot, func)()
 
-    def toggle_trace(self, index):
-        for act in self.trace_acts:
+    def toggle_trace_rate(self, index):
+        for act in self.trace_rate_acts:
             act.setEnabled(index in [self.trace_idx, self.rate_idx])
+
+    def toggle_spec(self, index):
+        for act in self.spec_acts:
+            act.setEnabled(index == self.spec_idx)
         
     def setup_toolbar(self):
         tools = QToolBar(self)
@@ -625,7 +692,7 @@ class ThunderfishDialog(QDialog):
         act = QAction('&Home', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_DirHomeIcon))
         act.setToolTip('Reset zoom (h, Home)')
-        act.setShortcuts(['h', 'r'])
+        act.setShortcuts(['h'])
         act.triggered.connect(self.home)
         tools.addAction(act)
         
@@ -658,6 +725,31 @@ class ThunderfishDialog(QDialog):
         tools.addAction(act)
         
         tools.addSeparator()
+
+        act = QShortcut(QKeySequence('Shift+X'), self)
+        act.activated.connect(self.trace_plot.zoom_ampl_in)
+        self.trace_acts.append(act)
+        
+        act = QShortcut(QKeySequence('x'), self)
+        act.activated.connect(self.trace_plot.zoom_ampl_out)
+        self.trace_acts.append(act)
+
+        if not self.rate_plot is None:
+            act = QShortcut(QKeySequence('Shift+R'), self)
+            act.activated.connect(self.rate_plot.zoom_rate_in)
+            self.rate_acts.append(act)
+
+            act = QShortcut(QKeySequence('r'), self)
+            act.activated.connect(self.rate_plot.zoom_rate_out)
+            self.rate_acts.append(act)
+
+        act = QShortcut(QKeySequence('Shift+F'), self)
+        act.activated.connect(self.spec_plot.zoom_freq_in)
+        self.spec_acts.append(act)
+        
+        act = QShortcut(QKeySequence('f'), self)
+        act.activated.connect(self.spec_plot.zoom_freq_out)
+        self.spec_acts.append(act)
         
         act = QAction('Trace', self)
         #act.setIcon(self.style().standardIcon(QStyle.SP_DirHomeIcon))
@@ -665,7 +757,7 @@ class ThunderfishDialog(QDialog):
         act.setShortcuts(['a'])
         act.triggered.connect(lambda x: self.dispatch_trace('toggle_time_range'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         act = QAction('Home', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipBackward))
@@ -673,7 +765,7 @@ class ThunderfishDialog(QDialog):
         act.setShortcuts([QKeySequence.MoveToStartOfLine, QKeySequence.MoveToStartOfDocument])
         act.triggered.connect(lambda x: self.dispatch_trace('home'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         act = QAction('Seek backward', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekBackward))
@@ -681,7 +773,7 @@ class ThunderfishDialog(QDialog):
         act.setShortcuts([QKeySequence.MoveToPreviousPage])
         act.triggered.connect(lambda x: self.dispatch_trace('move_backward'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         act = QAction('Seek forward', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekForward))
@@ -689,7 +781,7 @@ class ThunderfishDialog(QDialog):
         act.setShortcuts([QKeySequence.MoveToNextPage])
         act.triggered.connect(lambda x: self.dispatch_trace('move_forward'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         act = QAction('End', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipForward))
@@ -697,36 +789,36 @@ class ThunderfishDialog(QDialog):
         act.setShortcuts([QKeySequence.MoveToEndOfLine, QKeySequence.MoveToEndOfDocument])
         act.triggered.connect(lambda x: self.dispatch_trace('end'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         act = QAction('+', self)
         #act.setIcon(self.style().standardIcon(QStyle.SP_DirHomeIcon))
         act.setToolTip('Zoom in to trace plot (+)')
         act.setShortcuts([QKeySequence.ZoomIn, '+', '='])
-        act.triggered.connect(lambda x: self.dispatch_trace('zoom_in'))
+        act.triggered.connect(lambda x: self.dispatch_trace('zoom_time_in'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         act = QAction('-', self)
         #act.setIcon(self.style().standardIcon(QStyle.SP_DirHomeIcon))
         act.setToolTip('Zoom out of trace plot (-)')
         act.setShortcuts([QKeySequence.ZoomOut, '-'])
-        act.triggered.connect(lambda x: self.dispatch_trace('zoom_out'))
+        act.triggered.connect(lambda x: self.dispatch_trace('zoom_time_out'))
         tools.addAction(act)
-        self.trace_acts.append(act)
+        self.trace_rate_acts.append(act)
         
         tools.addSeparator()
 
         act = QAction('&Maximize', self)
         act.setIcon(self.style().standardIcon(QStyle.SP_TitleBarMaxButton))
-        act.setToolTip('Maximize window (m)')
-        act.setShortcuts(['m', 'Ctrl+M', 'Ctrl+Shift+M'])
+        act.setToolTip('Maximize window (Ctrl+M)')
+        act.setShortcuts(['Ctrl+M', 'Ctrl+Shift+M'])
         act.triggered.connect(self.toggle_maximize)
         tools.addAction(act)
 
         act = QAction('&Fullscreen', self)
-        act.setToolTip('Fullscreen window (f)')
-        act.setShortcuts(['f'])
+        act.setToolTip('Fullscreen window (Ctrl+F)')
+        act.setShortcuts(['Ctrl+F'])
         act.triggered.connect(self.toggle_fullscreen)
         tools.addAction(act)
 

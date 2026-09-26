@@ -157,8 +157,8 @@ def extract_wave(data, rate, freq, deltaf,
         """
         wave = np.zeros(1)
         freq = 0.0
+        twave = np.arange(n)/rate
         for f in frange:
-            twave = np.arange(n)/rate
             w = np.zeros(len(twave))
             t = np.arange(len(data))/rate
             for k in range(nh):
