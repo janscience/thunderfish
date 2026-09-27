@@ -1502,6 +1502,9 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
         'pulse' the properties 'EODf' and 'peaktimes' are used. 'EODf'
         is the averaged EOD frequency, and 'peaktimes' is a list of
         detected EOD pulse times.
+        Three new elements with keys 'color', 'marker', 'markersize' are added.
+        These are the color, marker, andrelative size actually used to mark
+        pulse times.
     toffs: float
         Time of first data value in seconds that will be added
         to the pulse times in `eod_props`.
@@ -1536,6 +1539,9 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
             style['marker'] = markers[k%len(markers)]
         if marker_size is not None:
             style['ms'] = marker_size
+        eod['color'] = style['color']
+        eod['marker'] = style['marker']
+        eod['markersize'] = 1.0
         label = f'{eod["EODf"]:6.1f} Hz'
         ax.plot(x, y, linestyle='none', label=label,
                 zorder=-1, **style)

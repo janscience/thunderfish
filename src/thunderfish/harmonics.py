@@ -1673,9 +1673,21 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         Dictionary that maps artist handles marking the harmonic groups
         with tuples containing the index and the 2D arrays from the
         `group_list`.
+    groups_colors: list of matplotlib colors
+        For each group the color that was used to mark it in
+        the power spectrum.
+        Color can be None if not plotted.
+    groups_markers: list of string
+        For each group the marker symbol that was used to mark it in
+        the power spectrum.
+        Marker symbol can be None if not plotted.
+    groups_sizes: list of float
+        For each group the marker size that was used to mark it in
+        the power spectrum relative to the maximumpossible size.
+        Marker size can be None if not plotted.
     """
     if len(group_list) == 0:
-        return
+        return {}, [], [], []
     
     # sort by power:
     powers = np.array([np.sum(group[:,1]) for group in group_list])
@@ -1693,6 +1705,9 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
     groups_dict = {}
     artists = []
     labels = []
+    groups_colors = [None]*len(group_list)
+    groups_markers = [None]*len(group_list)
+    groups_sizes = [None]*len(group_list)
     k = 0
     for i in idx:
         if indices is not None and skip_bad and indices[i] < 0:
@@ -1719,6 +1734,9 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
                 break
             aa = ax.plot(x, y, label=label, linestyle='none', marker=markers[k],
                          mec=None, mew=0.0, ms=msize, **color_kwargs)
+        groups_colors[i] = aa[0].get_markerfacecolor()
+        groups_markers[i] = aa[0].get_marker()
+        groups_sizes[i] = aa[0].get_markersize()/17
         for a in aa:
             a.set_picker(8)
             groups_dict[a] = [i, group]
@@ -1738,7 +1756,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         a.set_picker(8)
         i = idx[k]
         groups_dict[a] = [i, group_list[i]]
-    return groups_dict
+    return groups_dict, groups_colors, groups_markers, groups_sizes
 
 
 def plot_psd_harmonic_groups(ax, psd_freqs, psd, group_list,

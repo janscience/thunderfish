@@ -30,6 +30,7 @@ except ImportError:
     from PyQt5.QtCore import pyqtSignal as Signal
 from PyQt5.QtCore import Qt, QObject, QTime
 from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
 from PyQt5.QtWidgets import QDialog, QShortcut, QVBoxLayout, QHBoxLayout
 from PyQt5.QtWidgets import QWidget, QTabWidget, QToolBar, QAction, QStyle
 from PyQt5.QtWidgets import QPushButton, QLabel, QScrollArea, QFileDialog
@@ -219,8 +220,10 @@ class PowerPlot():
                          decibel(power_thresh[:, 1]),
                          '#CCCCCC', lw=1)
         self.wave_dict = {}
+        self.colors = []
+        self.markers = []
         if len(wave_eodfs) > 0:
-            self.wave_dict = \
+            self.wave_dict, self.colors, self.markers, self.markersizes = \
                 plot_harmonic_groups(self.ax, wave_eodfs,
                                      wave_indices, max_groups=0,
                                      skip_bad=False,
@@ -410,7 +413,7 @@ class TeeStringIO(StringIO):
         self.orig_stdout = sys.stdout
         self.orig_stdout.flush()
 
-    def write(self,*args, **kwargs):
+    def write(self, *args, **kwargs):
         super().write(*args, **kwargs)
         self.orig_stdout.write(*args, **kwargs)
 
@@ -519,10 +522,18 @@ class ThunderfishDialog(QDialog):
 
         # tab with power spectrum:
         self.spec_plot = PowerPlot(power_freqs, powers, power_thresh,
-                                    self.wave_eodfs, self.wave_indices,
-                                    self.wave_colors, self.wave_markers)
+                                   self.wave_eodfs, self.wave_indices,
+                                   self.wave_colors, self.wave_markers)
         self.navis.append(self.spec_plot.navi)
         self.spec_idx = self.tabs.addTab(self.spec_plot.canvas, 'Spectrum')
+        for k, i in enumerate(self.wave_indices):
+            if i < 0 or \
+               self.spec_plot.colors[k] is None or \
+               self.spec_plot.markers[k] is None:
+                continue
+            self.eod_props[i]['color'] = self.spec_plot.colors[k]
+            self.eod_props[i]['marker'] = self.spec_plot.markers[k]
+            self.eod_props[i]['markersize'] = self.spec_plot.markersizes[k]
 
         # tab with frequencies:
         if len(self.eodfs) > 1:
@@ -561,8 +572,12 @@ class ThunderfishDialog(QDialog):
                                    self.phase_data[k], self.unit)
                 self.eod_plots.append(eod_plot)
                 self.navis.append(eod_plot.navi)
-                self.eod_tabs.addTab(eod_plot.canvas,
-                                     f'{i}: {self.eod_props[k]['EODf']:.1f}Hz')
+                icon = self.marker_icon(self.eod_props[k])
+                label = f'{i}: {self.eod_props[k]['EODf']:.1f}Hz'
+                if icon is None:
+                    self.eod_tabs.addTab(eod_plot.canvas, label)
+                else:
+                    self.eod_tabs.addTab(eod_plot.canvas, icon, label)
             # sort EOD frequencies:
             self.eodfs = self.eodfs[inx]
 
@@ -577,6 +592,28 @@ class ThunderfishDialog(QDialog):
         hbox.addWidget(QLabel())
         hbox.addWidget(close)
         vbox.addLayout(hbox)
+
+    def marker_icon(self, eod, size=32):
+        if not 'color' in eod or not 'marker' in eod:
+            return None
+        radius = size - 2
+        if 'markersize' in eod:
+            radius = int(np.round(radius*eod['markersize']))
+        offs = (size - radius)//2
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)  # smooth edges
+        color = QColor(*(eod['color']*255).astype(int))
+        painter.setBrush(color)
+        painter.setPen(Qt.NoPen)  # no outline
+        if eod['marker'] == 'o':
+            painter.drawEllipse(offs, offs, radius, radius)
+        else:
+            print(f'marker "{eod['marker']}" not supported yet')
+            return None
+        painter.end()
+        return QIcon(pixmap)
 
     def resizeEvent(self, event):
         if self.eod_tabs is None:
