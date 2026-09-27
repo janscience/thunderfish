@@ -1637,7 +1637,8 @@ def colors_markers():
 
 def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
                          skip_bad=False, sort_by_freq=True, label_power=False,
-                         colors=None, markers=None, legend_rows=8, **kwargs):
+                         colors=None, markers=None, marker_size=18,
+                         legend_rows=8, **kwargs):
     """Mark decibel power of fundamentals and their harmonics in a plot.
 
     Parameters
@@ -1662,6 +1663,8 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         If not None list of colors for plotting each group
     markers: list of markers or None
         If not None list of markers for plotting each group
+    marker_size: float
+        Maximum size of markers used to mark the pulses.
     legend_rows: int
         Maximum number of rows to be used for the legend.
     kwargs: 
@@ -1715,7 +1718,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         group = group_list[i]
         x = group[:, 0]
         y = decibel(group[:, 1])
-        msize = 7.0 + 10.0*(powers[i]/max_power)**0.25
+        msize = marker_size*(0.3 + 0.7*(powers[i]/max_power)**0.25)
         color_kwargs = {}
         if colors is not None:
             color_kwargs = {'color': colors[k%len(colors)]}
@@ -1736,7 +1739,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
                          mec=None, mew=0.0, ms=msize, **color_kwargs)
         groups_colors[i] = aa[0].get_markerfacecolor()
         groups_markers[i] = aa[0].get_marker()
-        groups_sizes[i] = aa[0].get_markersize()/17
+        groups_sizes[i] = aa[0].get_markersize()/marker_size
         for a in aa:
             a.set_picker(8)
             groups_dict[a] = [i, group]

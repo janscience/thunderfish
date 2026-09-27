@@ -610,6 +610,7 @@ class ThunderfishDialog(QDialog):
         if eod['marker'] == 'o':
             painter.drawEllipse(offs, offs, radius, radius)
         else:
+            painter.end()
             print(f'marker "{eod['marker']}" not supported yet')
             return None
         painter.end()

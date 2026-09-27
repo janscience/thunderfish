@@ -1482,8 +1482,8 @@ def pulse_quality(props, max_clipped_frac=0.1, max_rms_sem=0.0):
 
 
 def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
-                        toffs=0, colors=None, markers=None, marker_size=10,
-                        legend_rows=8, **kwargs):
+                        toffs=0, colors=None, markers=None,
+                        marker_size=10, legend_rows=8, **kwargs):
     """Mark pulse EODs in a plot of an EOD recording.
 
     Parameters
@@ -1499,9 +1499,10 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
     eod_props: list of dictionaries
         Lists of EOD properties as returned by `analyze_pulse()`
         and `analyze_wave()`.  From the entries with 'type' ==
-        'pulse' the properties 'EODf' and 'peaktimes' are used. 'EODf'
-        is the averaged EOD frequency, and 'peaktimes' is a list of
-        detected EOD pulse times.
+        'pulse' the properties 'EODf', 'peaktimes', and 'ppampl' are used.
+        'EODf' is the averaged EOD frequency, 'peaktimes' is a list of
+        detected EOD pulse times, and 'ppampl' is the peak-to-peak amplitude
+        of the EOD waveform.
         Three new elements with keys 'color', 'marker', 'markersize' are added.
         These are the color, marker, andrelative size actually used to mark
         pulse times.
@@ -1519,11 +1520,19 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
     kwargs: 
         Key word arguments for the legend of the plot.
     """
+    amax = 0
+    for eod in eod_props:
+        if eod['type'] != 'pulse' or 'peaktimes' not in eod:
+            continue
+        if 'ppampl' in eod and amax < eod['ppampl']:
+            amax = eod['ppampl']
     k = 0
     for eod in eod_props:
         if eod['type'] != 'pulse':
             continue
         if 'peaktimes' not in eod:
+            continue
+        if 'ppampl' not in eod:
             continue
         x = eod['peaktimes'] + toffs
         pidx = np.round(eod['peaktimes']*rate).astype(int)
@@ -1537,11 +1546,10 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
             style['marker'] = 'o'
         else:
             style['marker'] = markers[k%len(markers)]
-        if marker_size is not None:
-            style['ms'] = marker_size
+        style['ms'] = marker_size*(0.3 + 0.7*(min(1, eod['ppampl']/amax))**0.25)
         eod['color'] = style['color']
         eod['marker'] = style['marker']
-        eod['markersize'] = 1.0
+        eod['markersize'] = style['ms']/marker_size
         label = f'{eod["EODf"]:6.1f} Hz'
         ax.plot(x, y, linestyle='none', label=label,
                 zorder=-1, **style)
