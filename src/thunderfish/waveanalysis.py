@@ -7,7 +7,7 @@ Analysis of wave-type EODs.
 - `condition_wave()`: subtract offset, flip, and shift wave-type EOD waveform.
 - `analyze_wave_properties()`: characterize basic properties of a wave-type EOD.
 - `analyze_wave_phases()`: characterize all phases of a wave-type EOD.
-- `analyse_wave_spectrum()`: analyze the spectrum of a wave-type EOD.
+- `analyze_wave_spectrum()`: analyze the spectrum of a wave-type EOD.
 
 ### Complete analysis
 
@@ -660,7 +660,7 @@ def analyze_wave_phases(eod, ratetime, freq, thresh_frac=0.05):
     return phases
     
     
-def analyse_wave_spectrum(freq, coeffs, n_phase_harmonics=8):
+def analyze_wave_spectrum(freq, coeffs, n_phase_harmonics=8):
     """Analyze the spectrum of a wave-type EOD.
     
     Parameters
@@ -670,9 +670,7 @@ def analyse_wave_spectrum(freq, coeffs, n_phase_harmonics=8):
         frequency and peak height (columns) as returned from
         `harmonics.harmonic_groups()`.
     coeffs: None or 1-D array of complex
-        The Fourier coefficients of an EOD waveform.
-        If provided, they are taken for the spectrum and the waveform
-        is updated from them.
+        The Fourier coefficients of an EOD waveform, first one is the offset.
     n_phase_harmonics: int
         Number of harmonics over which to compute the slope of the phases.
     
@@ -945,7 +943,7 @@ def analyze_wave(eod, ratetime, freq, coeffs=None,
     
     # spectral analysis:
     spec, power, data_power, thd, max_harmonics, db_diff, phase_slope = \
-        analyse_wave_spectrum(freq, coeffs,
+        analyze_wave_spectrum(freq, coeffs,
                               n_phase_harmonics=n_phase_harmonics)
 
     # store results:
@@ -1885,7 +1883,7 @@ def extract_wave_args(cfg):
         
 def add_analyze_wave_config(cfg, max_harmonics=20, flip_wave='none',
                             thresh_frac=0.05, n_phase_harmonics=8):
-    """Add all parameters needed for `analyse_wave()` as a new
+    """Add all parameters needed for `analyze_wave()` as a new
     section to a configuration.
 
     Parameters
