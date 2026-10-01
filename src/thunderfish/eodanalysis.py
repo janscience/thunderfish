@@ -241,6 +241,12 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 print(f'found {len(eod_times):2d} pulsefish EODs')
             else:
                 print('no pulsefish EODs found')
+        if plot_level > 0 and len(eod_times) > 0:
+            fig, ax = plt.subplots()
+            for eod, times in zip(eods, eod_times):
+                ax.plot(eod[:, 0], eod[:, 1], label=f'{1/np.median(np.diff(times)):.1f}Hz')
+            ax.legend()
+            plt.show()
 
         # analyse eod waveform of pulse-fish:
         for mean_eod, eod_ts, eod_pts in zip(eods, eod_times, eod_peaktimes):
@@ -262,7 +268,7 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
                 continue
             clipped_frac = clipped_fraction(data, rate, eod_ts,
                                             mean_eod, min_clip, max_clip)
-            props['peaktimes'] = eod_pts  # XXX that should go into analyze pulse
+            props['peaktimes'] = eod_ts  # XXX that should go into analyze pulse
             props['index'] = len(eod_props)
             props['clipped'] = clipped_frac
             props['samplerate'] = rate

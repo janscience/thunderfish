@@ -1377,11 +1377,9 @@ def extract_snippets(data, eod_idx, eod_widths, left, right):
         coef = fourier_coeffs(snippet, np.arange(m) - ileft, freq, 1)[1]
         coefs[k] = coef/np.abs(coef)
     coefs *= np.conjugate(np.mean(coefs))
-    ishifts = np.zeros(len(snippets), dtype=int)
     for k in range(len(snippets)):
         tshift = np.angle(coefs[k])/(2*np.pi*freq)
         ishift = int(np.round(tshift))
-        ishifts[k] = ishift
         snippets[k] = np.roll(snippets[k], ishift)
     snippets = snippets[:, xleft - left:xleft + right]
     return snippets
@@ -1711,7 +1709,7 @@ def delete_wavefish_and_sidepeaks(data, clusters, eod_x, eod_widths,
 def merge_clusters(clusters_1, clusters_2, x_1, x_2, verbose=0): 
     """ Merge clusters resulting from two clustering methods.
 
-    This method only works  if clustering is performed on the same EODs
+    This method only works if clustering is performed on the same EODs
     with the same ordering, where there  is a one to one mapping from
     clusters_1 to clusters_2. 
 
@@ -1747,13 +1745,13 @@ def merge_clusters(clusters_1, clusters_2, x_1, x_2, verbose=0):
 
     # add n to one of the cluster lists to avoid overlap
     ovl = np.max(clusters_1) + 1
-    clusters_2[clusters_2!=-1] = clusters_2[clusters_2!=-1] + ovl
+    clusters_2[clusters_2 != -1] = clusters_2[clusters_2 !=- 1] + ovl
 
     remove_clusters = [[]]
     keep_clusters = []
     og_clusters = [np.copy(clusters_1), np.copy(clusters_2)]
     
-    # loop untill done
+    # loop until done
     while True:
 
         # compute unique clusters and cluster sizes
@@ -1854,9 +1852,11 @@ def extract_mean_waveforms(data, rate, pos_inx, peak_inx, trough_inx,
         if l == -1:
             continue
         w = widths[labels == l]
-        cut_width = int(np.ceil(np.median(w)*width_fac))
+        # median_width = int(np.ceil(np.median(w)*width_fac))
+        median_ipi = int(np.median(np.diff(pos_inx[labels == l])))
+        cut_width = median_ipi//3
         snippets = extract_snippets(data, pos_inx[labels == l],
-                                    w, cut_width, 2*cut_width)
+                                    w, cut_width, median_ipi - cut_width)
 
         mean = np.mean(snippets, axis=0)
         sem = np.std(snippets, axis=0)/np.sqrt(len(snippets))

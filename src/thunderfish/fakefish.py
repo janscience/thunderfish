@@ -257,7 +257,8 @@ def wavefish_eods(fish='Eigenmannia', frequency=100.0, rate=44100.0,
     for h, c in enumerate(coeffs):
         data += np.real(c*np.exp(iomega*h + 1j*h*phase0))
     # add noise:
-    data += noise_std * np.random.randn(len(data))
+    if noise_std > 0:
+        data += noise_std*np.random.randn(len(data))
     return data
 
 

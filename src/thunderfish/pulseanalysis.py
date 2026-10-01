@@ -87,7 +87,7 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
     Parameters
     ----------
     eod: 1-D or 2-D array of float
-        The eod waveform of which the spectrum is computed.
+        The eod waveform to be conditioned.
         If an 1-D array, then this is the waveform and you
         need to also pass a sampling rate in `rate`.
         If a 2-D array, then first column is time in seconds and second
@@ -196,7 +196,10 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
     noise_thresh = max(range_thresh, sem_thresh)
     if noise_thresh > 0.5*max_ampl:
         noise_thresh = 0.5*max_ampl
-        
+
+    # TODO: do not base cutout on noise threshold
+    # TODO: rather check for multiple EODs and cut put this.
+    # TODO: could be done on peak detection with high threshold.
     # generous left edge of waveform:
     l1_idx = np.argmax(np.abs(meod) > noise_thresh)
     l2_idx = np.argmax(np.abs(meod) > 2*noise_thresh)
@@ -229,7 +232,7 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         if eod.ndim == 2:
             eod = eod[l_idx:r_idx, :]
     
-    # return offset, flipped, and shifted waveform:
+    # return offset, flipped, shifted, and cut out waveform:
     if eod.ndim == 2:
         eod[:, 0] = time
         eod[:, 1] = meod
@@ -901,7 +904,7 @@ def pulsetrain(eod_times, eod, ratetime=None,
     eod_times: 1-D array or None
         List of times of detected EODs.
     eod: 1-D or 2-D array
-        The EOD waveform of which the spectrum is computed.
+        The EOD waveform used to synthezie the pulse train.
         If an 1-D array, then this is the waveform and you
         need to also pass a sampling rate in `rate`.
         If a 2-D array, then first column is time in seconds and second
