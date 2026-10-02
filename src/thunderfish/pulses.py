@@ -17,6 +17,7 @@ except ImportError:
 from pathlib import Path
 from scipy import stats
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 from sklearn.decomposition import PCA
 from sklearn.cluster import DBSCAN
 from sklearn.mixture import BayesianGaussianMixture
@@ -82,7 +83,7 @@ def unique_counts(ar):
 
 def extract_pulsefish(data, rate, frate=0.5e6, width_factor_shape=3,
                       width_factor_wave=8, width_factor_display=8,
-                      verbose=0, plot_level=0, return_data=[]):
+                      align='fourier', verbose=0, plot_level=0, return_data=[]):
     """Extract and cluster pulse-type fish EODs from data.
     
     Takes recording data containing an unknown number of pulsefish and
@@ -105,6 +106,8 @@ def extract_pulsefish(data, rate, frate=0.5e6, width_factor_shape=3,
         Width multiplier used for wavefish detection.
     width_factor_display : float
         Width multiplier used for EOD mean extraction and display.
+    align: 'max', 'savgol', 'fourier'
+        Method used to align peak snippets. See extract_snippets() for details.
     verbose : int
         Verbosity level.
     plot_level : int
@@ -389,14 +392,15 @@ def extract_pulsefish(data, rate, frate=0.5e6, width_factor_shape=3,
                     merge_thresh_height=merge_thresh_height,
                     n_pca=n_pca, shape_eps=shape_eps,
                     low_freq=low_freq, min_power_ratio=min_power_ratio,
-                    pulse_thresh=pulse_thresh,
+                    pulse_thresh=pulse_thresh, align=align,
                     verbose=verbose, plot_level=plot_level-1,
                     return_data=return_data) 
 
         # extract mean eods and times:
         mean_eods, eod_times, eod_peaktimes, eod_troughtimes, cluster_labels = \
           extract_mean_waveforms(i_data, i_rate, x_merge, x_peak, x_trough,
-                                 eod_widths, clusters, width_factor_display)
+                                 eod_widths, clusters, width_factor_display,
+                                 align)
 
         # determine clipped clusters (save them, but ignore in other steps):
         clusters, clipped_eods, clipped_times, clipped_peaktimes, clipped_troughtimes = \
@@ -421,7 +425,8 @@ def extract_pulsefish(data, rate, frate=0.5e6, width_factor_shape=3,
         # extract mean eods
         mean_eods, eod_times, eod_peaktimes, eod_troughtimes, cluster_labels = \
           extract_mean_waveforms(i_data, i_rate, x_merge, x_peak, x_trough,
-                                 eod_widths, clusters, width_factor_display)
+                                 eod_widths, clusters, width_factor_display,
+                                 align)
 
         mean_eods.extend(clipped_eods)
         eod_times.extend(clipped_times)
@@ -680,7 +685,7 @@ def cluster(data, rate, eod_xp, eod_xt, eod_heights, eod_widths,
             n_gaus_height=10, merge_thresh_height=0.1,
             n_pca=5, shape_eps=0.05,
             low_freq=10000, min_power_ratio=0.5,
-            pulse_thresh=0.2,            
+            pulse_thresh=0.2, align='fourier',
             verbose=0, plot_level=0, return_data=[]):
     """Cluster EODs.
     
@@ -735,6 +740,8 @@ def cluster(data, rate, eod_xp, eod_xt, eod_heights, eod_widths,
         for mean EOD snippets not being an artefact.
     pulse_thresh: float
         Maximum ratio of pulse width relative to inter-pulse interval.
+    align: 'max', 'savgol', 'fourier'
+        Method used to align peak snippets. See extract_snippets() for details.
     verbose : int
         Verbosity level.
     plot_level : int
@@ -829,10 +836,10 @@ def cluster(data, rate, eod_xp, eod_xt, eod_heights, eod_widths,
         # determine height labels:
         raw_p_snippets, p_snippets, p_features, p_bg_ratio = \
           extract_snippet_features(data, w_eod_xp, w_eod_widths,
-                                   w_eod_heights, width, n_pca)
+                                   w_eod_heights, width, n_pca, align)
         raw_t_snippets, t_snippets, t_features, t_bg_ratio = \
           extract_snippet_features(data, w_eod_xt, w_eod_widths,
-                                   w_eod_heights, width, n_pca)
+                                   w_eod_heights, width, n_pca, align)
             
         # TODO: rather keep the height threshold independent of slopes!
         #median_bg_ratios = np.median(np.min(np.vstack([p_bg_ratio, t_bg_ratio]),
@@ -1021,10 +1028,12 @@ def cluster(data, rate, eod_xp, eod_xt, eod_heights, eod_widths,
     
     wave_mask_p, sidepeak_mask_p, saved_data = \
       delete_wavefish_and_sidepeaks(data, all_p_labels, eod_xp, eod_widths,
-                                    width_factor_wave, verbose=verbose-1, sdict=saved_data)
+                                    width_factor_wave, align=align,
+                                    verbose=verbose-1, sdict=saved_data)
     wave_mask_t, sidepeak_mask_t, _ = \
       delete_wavefish_and_sidepeaks(data, all_t_labels, eod_xt, eod_widths,
-                                    width_factor_wave, verbose=verbose-1)  
+                                    width_factor_wave, align=align,
+                                    verbose=verbose-1)  
         
     og_clusters = [np.copy(all_p_labels), np.copy(all_t_labels)]
     og_labels = np.copy(all_p_labels + all_t_labels)
@@ -1304,7 +1313,8 @@ def plot_bgm_cluster(axs, xlabel, xunit, x, use_log,
     ax.set_ylim(bottom=0)
 
     
-def extract_snippets(data, eod_idx, eod_widths, left, right):
+def extract_snippets(data, eod_idx, eod_widths, left, right,
+                     align='fourier'):
     """Extract and align snippets from recording data.
 
     Parameters
@@ -1319,11 +1329,22 @@ def extract_snippets(data, eod_idx, eod_widths, left, right):
         Width to cut out to the left in samples.
     right: int
         Width to cut out to the right in samples.
+    align: 'max', 'savgol', 'fourier'
+        Method used to align peak snippets:
+        'max': keep detected peak position.
+        'savgol': use maximum of snippets smoothed with third order
+                  Savitzky-Golay filter.
+        'fourier': use phase of Fourier coefficient.
 
     Returns
     -------
     snippets : 2D array of float
         Extracted EOD snippets (rows are snippets, columns are time).
+
+    Raises
+    ------
+    ValueError:
+        Invalid value for `align`.
 
     """
     # extract snippets with corresponding width:
@@ -1354,39 +1375,50 @@ def extract_snippets(data, eod_idx, eod_widths, left, right):
         snippets[k0 + k, :] = data[idx - xleft:idx + xright]
         mask[k0 + k] = False
 
-    # align snippets on phase of first Fourier coefficient:
-    # (aligning on maximum of higher harmonics is much less robust)
-    n = snippets.shape[1]
-    dist = int(np.median(eod_widths))
-    freq = 1/(2*dist)
-    idist = min(dist + 1, int(1.2*dist))
-    ileft = xleft
-    i0 = ileft - idist
-    i1 = ileft + idist
-    if i0 < 0:
-        ileft += i0
-        i0 = 0
-    if i1 > n:
-        i1 = n
-    if 2*dist > n:
-        freq = 1.1/n 
-    coefs = np.zeros(len(snippets), dtype=complex)
-    for k in range(len(snippets)):
-        snippet = snippets[k, i0:i1]
-        m = len(snippet)
-        coef = fourier_coeffs(snippet, np.arange(m) - ileft, freq, 1)[1]
-        coefs[k] = coef/np.abs(coef)
-    coefs *= np.conjugate(np.mean(coefs))
-    for k in range(len(snippets)):
-        tshift = np.angle(coefs[k])/(2*np.pi*freq)
-        ishift = int(np.round(tshift))
-        snippets[k] = np.roll(snippets[k], ishift)
+    if align.lower() == 'savgol':
+        win = 5
+        filtered = savgol_filter(snippets, win, 2, axis=1)
+        for k in range(len(snippets)):
+            peak = np.abs(snippets[k,xleft - win:xleft + win])
+            ishift = win - np.argmax(peak)
+            snippets[k] = np.roll(snippets[k], ishift)
+    elif align.lower() == 'fourier':
+        # align snippets on phase of first Fourier coefficient:
+        # (aligning on maximum of higher harmonics is much less robust)
+        n = snippets.shape[1]
+        dist = int(np.median(eod_widths))
+        freq = 1/(2*dist)
+        idist = min(dist + 1, int(1.2*dist))
+        ileft = xleft
+        i0 = ileft - idist
+        i1 = ileft + idist
+        if i0 < 0:
+            ileft += i0
+            i0 = 0
+        if i1 > n:
+            i1 = n
+        if 2*dist > n:
+            freq = 1.1/n 
+        coefs = np.zeros(len(snippets), dtype=complex)
+        for k in range(len(snippets)):
+            snippet = snippets[k, i0:i1]
+            m = len(snippet)
+            coef = fourier_coeffs(snippet, np.arange(m) - ileft, freq, 1)[1]
+            coefs[k] = coef/np.abs(coef)
+        coefs *= np.conjugate(np.mean(coefs))
+        for k in range(len(snippets)):
+            tshift = np.angle(coefs[k])/(2*np.pi*freq)
+            ishift = int(np.round(tshift))
+            snippets[k] = np.roll(snippets[k], ishift)
+    elif align.lower() != 'max':
+        # max: align snippets on maximum - which they are already!
+        raise ValueError(f'ERROR in thunderfish.pulses.extract_snippets(): invalid value "{align}" for align parameter - should be "fourier".')
     snippets = snippets[:, xleft - left:xleft + right]
     return snippets
 
     
 def extract_snippet_features(data, eod_idx, eod_widths, eod_heights,
-                             width, n_pca=5):
+                             width, n_pca=5, align='fourier'):
     """Extract, align, normalize, snippets from recording data, normalize them, and perform PCA.
 
     Parameters
@@ -1403,6 +1435,8 @@ def extract_snippet_features(data, eod_idx, eod_widths, eod_heights,
         Width to cut out to each side in samples.
     n_pca: int
         Number of PCs to use for PCA.
+    align: 'max', 'savgol', 'fourier'
+        Method used to align peak snippets. See extract_snippets() for details.
 
     Returns
     -------
@@ -1416,7 +1450,8 @@ def extract_snippet_features(data, eod_idx, eod_widths, eod_heights,
         Ratio of the background activity slopes compared to EOD height.
 
     """
-    raw_snippets = extract_snippets(data, eod_idx, eod_widths, width, width)
+    raw_snippets = extract_snippets(data, eod_idx, eod_widths, width, width,
+                                    align)
 
     # subtract background slope:
     snippets, bg_ratio = subtract_slope(np.copy(raw_snippets), eod_heights)
@@ -1611,7 +1646,8 @@ def delete_unreliable_fish(clusters, eod_x, eod_widths, pulse_thresh=0.2,
 
 def delete_wavefish_and_sidepeaks(data, clusters, eod_x, eod_widths,
                                   width_fac, max_slope_deviation=0.5,
-                                  max_phases=4, verbose=0, sdict={}):
+                                  max_phases=4, align='fourier',
+                                  verbose=0, sdict={}):
     """ Create a mask for EODs that are likely from wavefish, or sidepeaks of bigger EODs.
 
     Parameters
@@ -1633,6 +1669,8 @@ def delete_wavefish_and_sidepeaks(data, clusters, eod_x, eod_widths,
     max_phases : int
         Maximum number of phases for any EOD. 
         If the mean EOD has more phases than this, it is not a pulse EOD.
+    align: 'max', 'savgol', 'fourier'
+        Method used to align peak snippets. See extract_snippets() for details.
     verbose : int 
         Verbosity level.
     sdict : dictionary
@@ -1658,7 +1696,7 @@ def delete_wavefish_and_sidepeaks(data, clusters, eod_x, eod_widths,
         mean_width = np.mean(eod_widths[clusters == cluster])
         cutwidth = int(mean_width*width_fac)
         snippets = extract_snippets(data, eod_x[clusters == cluster],
-                                    mean_width, cutwidth, cutwidth)
+                                    mean_width, cutwidth, cutwidth, align)
         
         # extract information on main peaks and troughs:
         mean_eod = np.mean(snippets, axis=0)
@@ -1804,7 +1842,7 @@ def merge_clusters(clusters_1, clusters_2, x_1, x_2, verbose=0):
 
 
 def extract_mean_waveforms(data, rate, pos_inx, peak_inx, trough_inx,
-                           widths, labels, width_fac):
+                           widths, labels, width_fac, align='fourier'):
     """ Extract time points and mean waveforms for each cluster.
 
     Parameters
@@ -1825,6 +1863,8 @@ def extract_mean_waveforms(data, rate, pos_inx, peak_inx, trough_inx,
         Cluster labels
     width_fac : float
         Multiplication factor for window used to extract waveform snippets.
+    align: 'max', 'savgol', 'fourier'
+        Method used to align peak snippets. See extract_snippets() for details.
 
     Returns
     -------
@@ -1856,7 +1896,8 @@ def extract_mean_waveforms(data, rate, pos_inx, peak_inx, trough_inx,
         median_ipi = int(np.median(np.diff(pos_inx[labels == l])))
         cut_width = median_ipi//3
         snippets = extract_snippets(data, pos_inx[labels == l],
-                                    w, cut_width, median_ipi - cut_width)
+                                    w, cut_width, median_ipi - cut_width,
+                                    align)
 
         mean = np.mean(snippets, axis=0)
         sem = np.std(snippets, axis=0)/np.sqrt(len(snippets))
@@ -2116,3 +2157,49 @@ def remove_sparse_detections(clusters, eod_widths, rate, T,
                 print('removed cluster {c:2d}: median coverage of {n*w:.2f}s is less than {100*min_density:.1f}% of data')
             clusters[clusters == c] = -1
     return clusters
+
+
+def add_extract_pulsefish_config(cfg, frate=0.5e6, width_factor_shape=3,
+                                 width_factor_wave=8, width_factor_display=8,
+                                 align='fourier'):
+    """Add all parameters needed for extract_pulsefish() to a configuration.
+
+    Parameters
+    ----------
+    cfg: ConfigFile
+        The configuration.
+        
+    See `extract_pulsefish()` for details on the remaining arguments.
+    """
+    cfg.add_section('Pulse-type fish extraction:')
+    cfg.add('upSamplePulse', frate, 'Hz', 'Sampling rate to which EOD snippets are upsampled.')
+    cfg.add('pulseShapeFactor', width_factor_shape, '', 'Size of snippets for shape clustering as a multiple of peak-trough distance.')
+    cfg.add('pulseWaveFactor', width_factor_wave, '', 'Size of snippets for removing wavefish as a multiple of peak-trough distance.')
+    cfg.add('pulseDisplayFactor', width_factor_display, '', 'Size of final snippets for further analysis and display as a multiple of peak-trough distance.')
+    cfg.add('alignPulses', align, '', 'Method used to align EOD snippets: "fourier", "savgol", or "max".')
+
+
+def extract_pulsefish_args(cfg):
+    """Retrieve parameters for `extract_pulsefish()` from configuration.
+    
+    The return value can then be passed as key-word arguments to this
+    function.
+
+    Parameters
+    ----------
+    cfg: ConfigFile
+        The configuration.
+
+    Returns
+    -------
+    a: dict
+        Dictionary with names of arguments of the `extract_pulsefish()` function
+        and their values as supplied by `cfg`.
+    """
+    a = cfg.map(frate='upSamplePulse',
+                width_factor_shape='pulseShapeFactor',
+                width_factor_wave='pulseWaveFactor',
+                width_factor_display='pulseDisplayFactor',
+                align='alignPulses')
+    return a
+

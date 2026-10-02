@@ -49,6 +49,7 @@ from .bestwindow import clip_args, best_window_args
 from .bestwindow import analysis_window, plot_data_window
 from .harmonics import add_psd_peak_detection_config, add_harmonic_groups_config
 from .harmonics import colors_markers, plot_harmonic_groups, plot_selected_groups
+from .pulses import add_extract_pulsefish_config
 from .pulseanalysis import plot_pulse_eodtimes
 from .pulseanalysis import plot_pulse_eod, plot_pulse_spectrum
 from .pulseanalysis import add_analyze_pulse_config
@@ -161,6 +162,7 @@ def configuration():
     del cfg['eodMinSem']
     add_extract_wave_config(cfg)
     add_analyze_wave_config(cfg)
+    add_extract_pulsefish_config(cfg)
     add_analyze_pulse_config(cfg, min_pulse_win=0.004, fade_frac=0.05)
     add_eod_quality_config(cfg)
     add_species_config(cfg)

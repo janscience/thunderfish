@@ -68,7 +68,7 @@ from .fakefish import normalize_wavefish, export_wavefish
 from .harmonics import harmonic_groups_args, psd_peak_detection_args
 from .harmonics import harmonic_groups, closest, consistent
 from .harmonics import plot_selected_groups
-from .pulses import extract_pulsefish
+from .pulses import extract_pulsefish, extract_pulsefish_args
 from .pulseanalysis import analyze_pulse, analyze_pulse_args
 from .pulseanalysis import pulsetrain_spectrum
 from .pulseanalysis import pulse_quality, pulse_quality_args
@@ -231,11 +231,11 @@ def detect_eods(data, rate, power_freqs, power_times, powers,
 
     if 'p' in mode:
         # detect pulse fish:
-        frate = 0.5e6  # TODO: make parameter
         eods, eod_times, eod_peaktimes, _ = \
-            extract_pulsefish(data, rate, frate,
+            extract_pulsefish(data, rate,
                               verbose=verbose - 1,
-                              plot_level=plot_level)
+                              plot_level=plot_level,
+                              **extract_pulsefish_args(cfg))
         if verbose > 0:
             if len(eod_times) > 0:
                 print(f'found {len(eod_times):2d} pulsefish EODs')
