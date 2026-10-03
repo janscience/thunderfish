@@ -496,7 +496,7 @@ class ThunderfishDialog(QDialog):
         self.log.setMinimumSize(self.log.sizeHint())
         self.scroll = QScrollArea(self)
         self.scroll.setWidget(self.log)
-        self.tabs.addTab(self.scroll, 'Log')
+        self.tabs.addTab(self.scroll, '&Log')
 
         # plots:
         plt.rcParams['axes.spines.top'] = False
@@ -507,7 +507,7 @@ class ThunderfishDialog(QDialog):
                                     self.eod_props, self.wave_eodfs,
                                     self.pulse_colors, self.pulse_markers)
         self.navis.append(self.trace_plot.navi)
-        self.trace_idx = self.tabs.addTab(self.trace_plot.canvas, 'Trace')
+        self.trace_idx = self.tabs.addTab(self.trace_plot.canvas, '&Trace')
         
         # tab with pulse rates:
         if self.npulse > 0:
@@ -515,7 +515,7 @@ class ThunderfishDialog(QDialog):
                                       self.pulse_colors, self.pulse_markers)
             self.rate_plot.ax.set_xlim(*self.trace_plot.ax.get_xlim())
             self.navis.append(self.rate_plot.navi)
-            self.rate_idx = self.tabs.addTab(self.rate_plot.canvas, 'Rate')
+            self.rate_idx = self.tabs.addTab(self.rate_plot.canvas, '&Rate')
         else:
             self.rate_plot = None
             self.rate_idx = None
@@ -525,7 +525,7 @@ class ThunderfishDialog(QDialog):
                                    self.wave_eodfs, self.wave_indices,
                                    self.wave_colors, self.wave_markers)
         self.navis.append(self.spec_plot.navi)
-        self.spec_idx = self.tabs.addTab(self.spec_plot.canvas, 'Spectrum')
+        self.spec_idx = self.tabs.addTab(self.spec_plot.canvas, '&Spectrum')
         for k, i in enumerate(self.wave_indices):
             if i < 0 or \
                self.spec_plot.colors[k] is None or \
@@ -540,7 +540,7 @@ class ThunderfishDialog(QDialog):
             self.freqs_plot = FrequenciesPlot(self.eodfs)
             self.navis.append(self.freqs_plot.navi)
             self.freqs_idx = self.tabs.addTab(self.freqs_plot.canvas,
-                                              'Frequencies')
+                                              '&Frequencies')
             self.freqs_plot.sigEODFreq.connect(self.raise_and_play)
             self.freqs_plot.sigEODFreqs.connect(self.play_interval)
         else:
@@ -574,6 +574,8 @@ class ThunderfishDialog(QDialog):
                 self.navis.append(eod_plot.navi)
                 icon = self.marker_icon(self.eod_props[k])
                 label = f'{i}: {self.eod_props[k]['EODf']:.1f}Hz'
+                if i < 10:
+                    label = '&' + label
                 if icon is None:
                     self.eod_tabs.addTab(eod_plot.canvas, label)
                 else:
