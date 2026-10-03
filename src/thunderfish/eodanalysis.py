@@ -1103,8 +1103,7 @@ def plot_eod_snippets(ax, data, rate, tmin, tmax, eod_times,
         snippet = data[idx + i0:idx + i1] - aoffs
         if flip:
             snippet *= -1
-        ax.plot(time, snippet - np.mean(snippet[:len(snippet)//4]),
-                zorder=-5, **snippet_style)
+        ax.plot(time, snippet, zorder=-5, **snippet_style)
 
 
 file_types = ['waveeodfs', 'wavefish', 'pulsefish', 'eodwaveform', 'wavephases',

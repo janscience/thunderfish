@@ -71,6 +71,7 @@ except ImportError:
 
 from pathlib import Path
 from scipy.optimize import curve_fit, minimize
+from scipy.signal import savgol_filter, find_peaks
 from thunderlab.eventdetection import detect_peaks, peak_width
 from thunderlab.powerspectrum import next_power_of_two, nfft, psd, decibel
 from thunderlab.tabledata import TableData
@@ -80,8 +81,8 @@ from .fakefish import pulsefish_waveform, pulsefish_spectrum
 
 
 def condition_pulse(eod, ratetime=None, sem=None, flip='none',
-                    baseline_frac=0.05, large_phase_frac=0.2,
-                    min_pulse_win=0.001):
+                    baseline_mode='mode', baseline_frac=0.05,
+                    large_phase_frac=0.2, min_pulse_win=0.001):
     """Subtract offset, flip, shift, and cut out pulse EOD waveform.
     
     Parameters
@@ -106,6 +107,13 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         - 'auto' flip waveform such that the first large extremum is positive.
         - 'flip' flip waveform.
         - 'none' do not flip waveform.
+    baseline_mode: "left", "right", "mean", "mode"
+        Method to compute baseline voltage:
+        "left": mean of leftmost `baseline_frac` data points.
+        "right": mean of rightmost `baseline_frac` data points.
+        "mean": mean of both leftmost and rightmost `baseline_frac` data points.
+        "mode": mode of the distribution of the data values,
+        i.e. most common value.
     baseline_frac: float
         Fraction of data points from which the amplitude offset is computed.
     large_phase_frac: float
@@ -134,6 +142,12 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         within the first `baseline_frac` data points of the EOD waveform.
         
     """
+    def mode(data):
+        sdata = np.sort(data)
+        n = max(10, len(data)//20)
+        filtered = savgol_filter(sdata, n, 2, 1)
+        return sdata[np.argmin(filtered)]
+    
     if eod.ndim == 2:
         time = eod[:, 0]
         meod = eod[:, 1]
@@ -144,15 +158,57 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         if isinstance(ratetime, (list, tuple, np.ndarray)):
             time = ratetime
         else:
-            time = np.arange(len(meod))/rate
+            time = np.arange(len(meod))/ratetime
         if np.isscalar(sem):
             sem = np.ones(len(meod))*sem
+    dt = time[1] - time[0]
             
-    # subtract mean computed from the left end:
-    n_base = int(baseline_frac*len(meod))
-    if n_base < 5:
-        n_base = 5
-    aoffs = np.mean(meod[:n_base])  # baseline
+    # check for additional high peaks:
+    l_idx = 0
+    r_idx = len(meod)
+    data = meod - mode(meod)
+    max_ampl = np.max(data)
+    min_ampl = np.min(data)
+    if max_ampl >= min_ampl:
+        peak_indices, _ = find_peaks(data, height=0.7*max_ampl,
+                                     distance=int(np.ceil(0.001/dt)))
+    else:
+        peak_indices, _ = find_peaks(-data, height=0.7*min_ampl,
+                                     distance=int(np.ceil(0.001/dt)))
+    main_idx = np.argmin(np.abs(peak_indices - len(data)//3))
+    if main_idx > 0:
+        l_idx = peak_indices[main_idx]
+        l_idx -= (peak_indices[main_idx] - peak_indices[main_idx - 1])//3
+    if main_idx < len(peak_indices) - 1:
+        r_idx = peak_indices[main_idx]
+        r_idx += 2*(peak_indices[main_idx + 1] - peak_indices[main_idx])//3
+    # cut out relevant signal:
+    if time[r_idx - 1] - time[l_idx] < min_pulse_win:
+        tmax = time[main_idx]
+        mask = (time >= tmax - min_pulse_win/3) & (time <= tmax + 2*min_pulse_win/3)
+        meod = meod[mask]
+        time = time[mask]
+        if eod.ndim == 2:
+            eod = eod[mask, :]
+    else:
+        meod = meod[l_idx:r_idx]
+        time = time[l_idx:r_idx]
+        if eod.ndim == 2:
+            eod = eod[l_idx:r_idx, :]
+
+    n_base = max(5, int(baseline_frac*len(meod)))
+    # subtract baseline:
+    if baseline_mode.lower() == 'left':
+        aoffs = np.mean(meod[:n_base])
+    elif baseline_mode.lower() == 'right':
+        aoffs = np.mean(meod[-n_base:])
+    elif baseline_mode.lower() == 'mean':
+        aoffs = 0.5*(np.mean(meod[:n_base]) + np.mean(meod[-n_base:]))
+    elif baseline_mode.lower() == 'mode':
+        aoffs = mode(meod)
+        print(aoffs)
+    else:
+        raise ValueError(f'ERROR in condition_pulse(): invalid baseline_mode "{baseline_mode}"! must be one of "left", "right", "mean" or "mode".')
     meod -= aoffs
     
     # flip waveform:
@@ -197,41 +253,6 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
     if noise_thresh > 0.5*max_ampl:
         noise_thresh = 0.5*max_ampl
 
-    # TODO: do not base cutout on noise threshold
-    # TODO: rather check for multiple EODs and cut put this.
-    # TODO: could be done on peak detection with high threshold.
-    # generous left edge of waveform:
-    l1_idx = np.argmax(np.abs(meod) > noise_thresh)
-    l2_idx = np.argmax(np.abs(meod) > 2*noise_thresh)
-    w = 2*(l2_idx - l1_idx)
-    if w < n_base:
-        w = n_base
-    l_idx = l1_idx - w
-    if l_idx < 0:
-        l_idx = 0
-    # generous right edge of waveform:
-    r1_idx = len(meod) - 1 - np.argmax(np.abs(meod[::-1]) > noise_thresh)
-    r2_idx = len(meod) - 1 - np.argmax(np.abs(meod[::-1]) > 2*noise_thresh)
-    w = 2*(r1_idx - r2_idx)
-    if w < n_base:
-        w = n_base
-    r_idx = max(r1_idx + w, 2*(max_idx - l_idx))
-    if r_idx >= len(meod):
-        r_idx = len(meod)
-    # cut out relevant signal:
-    if time[r_idx - 1] - time[l_idx] < min_pulse_win:
-        tmax = time[max_idx]
-        mask = (time >= tmax - min_pulse_win/3) & (time <= tmax + 2*min_pulse_win/3)
-        meod = meod[mask]
-        time = time[mask]
-        if eod.ndim == 2:
-            eod = eod[mask, :]
-    else:
-        meod = meod[l_idx:r_idx]
-        time = time[l_idx:r_idx]
-        if eod.ndim == 2:
-            eod = eod[l_idx:r_idx, :]
-    
     # return offset, flipped, shifted, and cut out waveform:
     if eod.ndim == 2:
         eod[:, 0] = time
@@ -1125,7 +1146,7 @@ def analyze_pulse_intervals(eod_times, ipi_cv_thresh=0.5,
 
             
 def analyze_pulse(eod, ratetime=None, eod_times=None,
-                  min_pulse_win=0.001,
+                  baseline_mode='mode', min_pulse_win=0.001,
                   start_end_thresh_fac=0.01, peak_thresh_frac=0.002,
                   min_dist=50.0e-6, width_frac=0.5, fit_frac=0.5,
                   freq_resolution=1.0, fade_frac=0.0,
@@ -1148,6 +1169,13 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
         rate in Hertz or the time array corresponding to `eod`.
     eod_times: 1-D array or None
         List of times of detected EOD peaks.
+    baseline_mode: "left", "right", "mean", "mode"
+        Method to compute baseline voltage:
+        "left": mean of leftmost `baseline_frac` data points.
+        "right": mean of rightmost `baseline_frac` data points.
+        "mean": mean of both leftmost and rightmost `baseline_frac` data points.
+        "mode": mode of the distribution of the data values,
+        i.e. most common value.
     min_pulse_win: float
         The minimum size of cut-out EOD waveform.
     start_end_thresh_fac: float
@@ -1320,7 +1348,7 @@ def analyze_pulse(eod, ratetime=None, eod_times=None,
 
     # conditioning of the waveform:
     meod, toffs, aoffs, flipped, noise_thresh = \
-        condition_pulse(meod, flip=flip_pulse,
+        condition_pulse(meod, flip=flip_pulse, baseline_mode=baseline_mode,
                         baseline_frac=0.05, large_phase_frac=0.2,
                         min_pulse_win=min_pulse_win)
 
@@ -2749,7 +2777,7 @@ def load_pulse_times(file_handle):
     return pulse_times
 
         
-def add_analyze_pulse_config(cfg, min_pulse_win=0.001,
+def add_analyze_pulse_config(cfg, baseline_mode='mode', min_pulse_win=0.001,
                              start_end_thresh_fac=0.01, peak_thresh_frac=0.002,
                              min_dist=50.0e-6, width_frac=0.5, fit_frac=0.5,
                              freq_resolution=1.0, fade_frac=0.0,
@@ -2766,6 +2794,7 @@ def add_analyze_pulse_config(cfg, min_pulse_win=0.001,
     See `analyze_pulse()` for details on the remaining arguments.
     """
     cfg.add_section('Pulse-type EOD analysis:')
+    cfg.add('eodPulseBaseline', baseline_mode, '', 'Method to compute baseline voltage. One of "left". "right", "mean", or "mode".')
     cfg.add('eodMinPulseSnippet', min_pulse_win, 's', 'Minimum duration of cut out EOD snippets for a pulse fish.')
     cfg.add('eodStartEndThresholdFactor', start_end_thresh_fac, '', 'Threshold for for start and end time of pulse EODs as a fraction of the p-p amplitude.')
     cfg.add('eodPeakThresholdFactor', 100*peak_thresh_frac, '%', 'Threshold for detection of peaks and troughs in pulse EODs as a fraction of the p-p amplitude.')
@@ -2797,7 +2826,8 @@ def analyze_pulse_args(cfg):
         Dictionary with names of arguments of the `analyze_pulse()` function
         and their values as supplied by `cfg`.
     """
-    a = cfg.map(min_pulse_win='eodMinPulseSnippet',
+    a = cfg.map(baseline_mode='eodPulseBaseline',
+                min_pulse_win='eodMinPulseSnippet',
                 start_end_thresh_fac='eodStartEndThresholdFactor',
                 peak_thresh_frac='eodPeakThresholdFactor',
                 min_dist='eodMinimumDistance',
