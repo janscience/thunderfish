@@ -32,6 +32,7 @@ Calls all the functions listed above:
 - `plot_pulse_rate()`: plot pulse rates.
 - `plot_pulse_eod()`: plot and annotate a pulse-type EOD waveform.
 - `plot_pulse_spectrum()`: plot and annotate spectrum of single pulse EOD.
+- `plot_pulse_distribution()`: plot EOD waveform, amplitude distribution and cumulative.
 
 ## Storage
 
@@ -58,13 +59,14 @@ Calls all the functions listed above:
 - `add_analyze_pulse_config()`: add parameters for `analyze_pulse()` to configuration.
 - `analyze_pulse_args()`: retrieve parameters for `analyze_pulse()` from configuration.
 - `add_pulse_quality_config()`: add parameters for `pulse_quality()` to configuration.
-- `wave_pulse_args()`: retrieve parameters for `pulse_quality()` from configuration.
+- `pulse_quality_args()`: retrieve parameters for `pulse_quality()` from configuration.
 
 """
 
 import numpy as np
 
 try:
+    import matplotlib.pyplot as plt
     from matplotlib.ticker import MultipleLocator
 except ImportError:
     pass
@@ -143,10 +145,13 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         
     """
     def mode(data):
+        n = max(10, len(data)//100)
+        order = 1
         sdata = np.sort(data)
-        n = max(10, len(data)//20)
-        filtered = savgol_filter(sdata, n, 2, 1)
-        return sdata[np.argmin(filtered)]
+        dsd = sdata[-1] - sdata[0]
+        mask = (sdata > sdata[0] + 0.01*dsd) & (sdata < sdata[0] + 0.99*dsd)
+        filtered = savgol_filter(sdata, n, order, 1)
+        return sdata[mask][np.argmin(filtered[mask])]
     
     if eod.ndim == 2:
         time = eod[:, 0]
@@ -195,6 +200,8 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         time = time[l_idx:r_idx]
         if eod.ndim == 2:
             eod = eod[l_idx:r_idx, :]
+            
+    # plot_pulse_distribution(eod)
 
     n_base = max(5, int(baseline_frac*len(meod)))
     # subtract baseline:
@@ -206,7 +213,6 @@ def condition_pulse(eod, ratetime=None, sem=None, flip='none',
         aoffs = 0.5*(np.mean(meod[:n_base]) + np.mean(meod[-n_base:]))
     elif baseline_mode.lower() == 'mode':
         aoffs = mode(meod)
-        print(aoffs)
     else:
         raise ValueError(f'ERROR in condition_pulse(): invalid baseline_mode "{baseline_mode}"! must be one of "left", "right", "mean" or "mode".')
     meod -= aoffs
@@ -2242,6 +2248,47 @@ def plot_pulse_spectrum(ax, energy, props, min_freq=1.0, max_freq=10000.0,
     ax.set_ylabel('Energy [dB]')
     return ref_energy
 
+
+def plot_pulse_distribution(eod_waveform):
+    """ Plot EOD waveform, amplitude distribution and cumulative.
+
+    This is for debug. It shows a new figure.
+
+    Parameters
+    ----------
+    eod_waveform: 2-D array
+        EOD waveform. First column is time in seconds, second column
+        the (mean) eod waveform.
+    """
+    time = 1000*eod_waveform[:, 0]
+    eod = eod_waveform[:, 1]
+    sdata = np.sort(eod)
+    icuml = np.arange(len(sdata))/len(sdata)
+    n = max(10, len(sdata)//100)
+    order = 1
+    filtered = savgol_filter(sdata, n, order, 0)
+    derived = savgol_filter(sdata, n, order, 1)
+    dsd = sdata[-1] - sdata[0]
+    mask = (sdata > sdata[0] + 0.01*dsd) & (sdata < sdata[0] + 0.99*dsd)
+    baseline = sdata[mask][np.argmin(derived[mask])]
+    fig, axs = plt.subplots(1, 4, sharey=True)
+    axs[0].plot(time, eod)
+    axs[0].axhline(baseline, color='k')
+    axs[0].set_xlabel('Time [ms]')
+    axs[0].set_ylabel('Amplitude')
+    axs[1].hist(eod, bins=len(eod)//10, orientation='horizontal')
+    axs[1].axhline(baseline, color='k')
+    axs[1].set_xlabel('Histogram')
+    axs[2].plot(icuml, sdata, '-o', ms=4)
+    #axs[2].plot(icuml, iampl)
+    axs[2].plot(icuml, filtered)
+    axs[2].axhline(baseline, color='k')
+    axs[2].set_xlabel('Cumulative')
+    axs[3].plot(derived, sdata)
+    axs[3].axhline(baseline, color='k')
+    axs[3].set_xlabel('Derivative')
+    plt.show()
+    
 
 def save_pulse_fish(eod_props, unit, basename, **kwargs):
     """Save properties of pulse EODs to file.
