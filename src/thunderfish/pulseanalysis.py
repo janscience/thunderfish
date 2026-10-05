@@ -1556,6 +1556,12 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
         Maximum number of rows to be used for the legend.
     kwargs: 
         Key word arguments for the legend of the plot.
+
+    Returns
+    -------
+    fish_dict: dict
+        Dictionary that maps artist handles marking the pusle fish times
+        with the "index" from `eod_props`.
     """
     amax = 0
     for eod in eod_props:
@@ -1563,6 +1569,8 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
             continue
         if 'ppampl' in eod and amax < eod['ppampl']:
             amax = eod['ppampl']
+    fish_indices = []
+    fish_dict = {}
     k = 0
     for eod in eod_props:
         if eod['type'] != 'pulse':
@@ -1588,17 +1596,27 @@ def plot_pulse_eodtimes(ax, data, rate, width, eod_props,
         eod['marker'] = style['marker']
         eod['markersize'] = style['ms']/marker_size
         label = f'{eod["EODf"]:6.1f} Hz'
-        ax.plot(x, y, linestyle='none', label=label,
-                zorder=-1, **style)
+        aa = ax.plot(x, y, linestyle='none', label=label,
+                     zorder=-1, **style)
+        for a in aa:
+            a.set_picker(8)
+            fish_dict[a] = eod['index']
+        fish_indices.append(eod['index'])
         k += 1
     # legend:
-    if k > 1:
+    if k > 0:
         if not 'ncol' in kwargs and legend_rows > 0:
             ncol = (k - 1) // legend_rows + 1
             kwargs['ncol'] = ncol
         if not 'numpoints' in kwargs:
             kwargs['numpoints'] = 1
-        ax.legend(**kwargs)
+        handles = ax.legend(**kwargs)
+        lines = handles.get_lines()
+        for j in range(len(lines)):
+            a = lines[j]
+            a.set_picker(8)
+            fish_dict[a] = fish_indices[j]
+    return fish_dict
 
 
 def plot_pulse_rate(ax, eod_props, toffs=0, colors=None,
@@ -1629,7 +1647,15 @@ def plot_pulse_rate(ax, eod_props, toffs=0, colors=None,
         Maximum number of rows to be used for the legend.
     kwargs: 
         Key word arguments for the legend of the plot.
+
+    Returns
+    -------
+    fish_dict: dict
+        Dictionary that maps artist handles marking the pusle fish times
+        with the "index" from `eod_props`.
     """
+    fish_indices = []
+    fish_dict = {}
     k = 0
     for props in eod_props:
         if props['type'] != 'pulse':
@@ -1649,21 +1675,31 @@ def plot_pulse_rate(ax, eod_props, toffs=0, colors=None,
         if marker_size is not None:
             style['ms'] = marker_size
         label = f'{props["EODf"]:6.1f} Hz'
-        ax.plot(times[:-1][mask], rate[mask], label=label,
-                linestyle='-', **style)
+        aa = ax.plot(times[:-1][mask], rate[mask], label=label,
+                     linestyle='-', **style)
         ax.plot(times[:-1][~mask], rate[~mask], linestyle='none', **style)
+        for a in aa:
+            a.set_picker(8)
+            fish_dict[a] = props['index']
+        fish_indices.append(props['index'])
         k += 1
     ax.set_xlabel('Time [s]')
     ax.set_ylim(bottom=0)
     ax.set_ylabel('Rate [Hz]')
     # legend:
-    if k > 1:
+    if k > 0:
         if not 'ncol' in kwargs and legend_rows > 0:
             ncol = (k - 1) // legend_rows + 1
             kwargs['ncol'] = ncol
         if not 'numpoints' in kwargs:
             kwargs['numpoints'] = 1
-        ax.legend(**kwargs)
+        handles = ax.legend(**kwargs)
+        lines = handles.get_lines()
+        for j in range(len(lines)):
+            a = lines[j]
+            a.set_picker(8)
+            fish_dict[a] = fish_indices[j]
+    return fish_dict
 
         
 def plot_pulse_eod(ax, eod_waveform, props, phases=None,

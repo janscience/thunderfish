@@ -56,14 +56,19 @@ from .harmonics import annotate_harmonic_group
 from .fakefish import wavefish_eods
 
 
-class TimePlot():
+class TimePlot(QObject):
+    
+    sigFish = Signal(int)
     
     def __init__(self, time):
+        super().__init__()
         self.full_time_range = (time[0], time[-1])
+        self.fish_dict = {}
         self.zoomed_time_range = None
         self.tfac = 1
         self.canvas = FigureCanvas(Figure(figsize=(10, 5),
                                           layout='constrained'))
+        self.canvas.mpl_connect('pick_event', self.onpick)
         self.navi = NavigationToolbar(self.canvas)
         self.navi.hide()
         self.ax = self.canvas.figure.subplots()
@@ -127,6 +132,12 @@ class TimePlot():
             t1 = self.full_time_range[1]
             self.ax.set_xlim(t1 - dt, t1)
             self.canvas.draw()                
+        
+    def onpick(self, event):
+        a = event.artist
+        if a in self.fish_dict:
+            inx = self.fish_dict[a]
+            self.sigFish.emit(inx)
             
 
 class TracePlot(TimePlot):
@@ -137,11 +148,11 @@ class TracePlot(TimePlot):
         twidth = 0.5
         self.tfac = plot_eod_recording(self.ax, data, self.rate, unit,
                                        twidth, time[0], rec_style)
-        plot_pulse_eodtimes(self.ax, data, self.rate,
-                            twidth, eod_props, time[0],
-                            colors=pulse_colors,
-                            markers=pulse_markers,
-                            frameon=True, loc='upper right')
+        self.fish_dict = plot_pulse_eodtimes(self.ax, data, self.rate,
+                                             twidth, eod_props, time[0],
+                                             colors=pulse_colors,
+                                             markers=pulse_markers,
+                                             frameon=True, loc='upper right')
         zoom_eod_recording(self.ax, eod_props, data, self.rate,
                            twidth, self.tfac, time[0])
         x0, x1 = self.ax.get_ylim()
@@ -170,8 +181,10 @@ class RatePlot(TimePlot):
     
     def __init__(self, time, eod_props, pulse_colors, pulse_markers):
         super().__init__(time)
-        plot_pulse_rate(self.ax, eod_props, toffs=self.full_time_range[0],
-                        colors=pulse_colors, markers=pulse_markers)
+        self.fish_dict = plot_pulse_rate(self.ax, eod_props,
+                                         toffs=self.full_time_range[0],
+                                         colors=pulse_colors,
+                                         markers=pulse_markers)
         _, self.max_rate = self.ax.get_ylim()
         if self.ax.get_legend() is not None:
             self.ax.get_legend().get_frame().set_color('white')
@@ -511,6 +524,7 @@ class ThunderfishDialog(QDialog):
         self.trace_plot = TracePlot(self.time, self.data, self.unit,
                                     self.eod_props, self.wave_eodfs,
                                     self.pulse_colors, self.pulse_markers)
+        self.trace_plot.sigFish.connect(self.raise_fish)
         self.navis.append(self.trace_plot.navi)
         self.trace_idx = self.tabs.addTab(self.trace_plot.canvas, '&Trace')
         
@@ -519,6 +533,7 @@ class ThunderfishDialog(QDialog):
             self.rate_plot = RatePlot(self.time, self.eod_props,
                                       self.pulse_colors, self.pulse_markers)
             self.rate_plot.ax.set_xlim(*self.trace_plot.ax.get_xlim())
+            self.rate_plot.sigFish.connect(self.raise_fish)
             self.navis.append(self.rate_plot.navi)
             self.rate_idx = self.tabs.addTab(self.rate_plot.canvas, '&Rate')
         else:
@@ -529,9 +544,9 @@ class ThunderfishDialog(QDialog):
         self.spec_plot = PowerPlot(power_freqs, powers, power_thresh,
                                    self.wave_eodfs, self.wave_indices,
                                    self.wave_colors, self.wave_markers)
+        self.spec_plot.sigFish.connect(self.raise_fish)
         self.navis.append(self.spec_plot.navi)
         self.spec_idx = self.tabs.addTab(self.spec_plot.canvas, '&Spectrum')
-        self.spec_plot.sigFish.connect(self.raise_fish)
         for k, i in enumerate(self.wave_indices):
             if i < 0 or \
                self.spec_plot.colors[k] is None or \
