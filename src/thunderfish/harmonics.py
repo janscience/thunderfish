@@ -1693,7 +1693,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         return {}, [], [], []
     
     # sort by power:
-    powers = np.array([np.sum(group[:,1]) for group in group_list])
+    powers = np.array([np.sum(group[:, 1]) for group in group_list])
     max_power = np.max(powers)
     idx = np.argsort(-powers)
     if max_groups > 0 and len(idx > max_groups):
@@ -1701,7 +1701,7 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
 
     # sort by frequency:
     if sort_by_freq:
-        freqs = np.array([group_list[group][0,0] for group in idx])
+        freqs = np.array([group_list[group][0, 0] for group in idx])
         idx = idx[np.argsort(freqs)]
 
     # plot:

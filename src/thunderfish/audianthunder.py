@@ -192,13 +192,17 @@ class RatePlot(TimePlot):
         self.canvas.draw()                
             
         
-class PowerPlot():
+class PowerPlot(QObject):
+    
+    sigFish = Signal(int)
     
     def __init__(self, power_freqs, powers, power_thresh,
                  wave_eodfs, wave_indices, wave_colors, wave_markers):
+        super().__init__()
         self.deltaf = np.mean(np.diff(power_freqs))
         self.power_freqs = power_freqs
         self.powers = powers
+        self.wave_indices = wave_indices
         self.canvas = FigureCanvas(Figure(figsize=(10, 5),
                                           layout='constrained'))
         self.harmonics_artists = []
@@ -225,7 +229,7 @@ class PowerPlot():
         if len(wave_eodfs) > 0:
             self.wave_dict, self.colors, self.markers, self.markersizes = \
                 plot_harmonic_groups(self.ax, wave_eodfs,
-                                     wave_indices, max_groups=0,
+                                     self.wave_indices, max_groups=0,
                                      skip_bad=False,
                                      sort_by_freq=True,
                                      label_power=False,
@@ -262,6 +266,7 @@ class PowerPlot():
             self.annotation = annotate_harmonic_group(self.ax, fish, finx,
                                                       freq_thresh=0.8*self.deltaf)
             self.ax.get_figure().canvas.draw()
+            self.sigFish.emit(self.wave_indices[finx])
             self.pick = QTime.currentTime()
             
     def onpress(self, event):
@@ -526,6 +531,7 @@ class ThunderfishDialog(QDialog):
                                    self.wave_colors, self.wave_markers)
         self.navis.append(self.spec_plot.navi)
         self.spec_idx = self.tabs.addTab(self.spec_plot.canvas, '&Spectrum')
+        self.spec_plot.sigFish.connect(self.raise_fish)
         for k, i in enumerate(self.wave_indices):
             if i < 0 or \
                self.spec_plot.colors[k] is None or \
@@ -872,6 +878,12 @@ class ThunderfishDialog(QDialog):
         tools.addAction(act)
 
         return tools
+
+    def raise_fish(self, inx):
+        for k, eod_plot in enumerate(self.eod_plots):
+            if eod_plot.props['index'] == inx:
+                self.eod_tabs.setCurrentIndex(k)
+                break
 
     def raise_and_play(self, eodf):
         inx = np.argmin(np.abs(self.eodfs - eodf))
