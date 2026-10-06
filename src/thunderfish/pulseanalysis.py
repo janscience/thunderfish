@@ -1676,8 +1676,8 @@ def plot_pulse_rate(ax, eod_props, toffs=0, colors=None,
             style['ms'] = marker_size
         label = f'{props["EODf"]:6.1f} Hz'
         if 'IPI-CV' in props:
-            cv = props["IPI-CV"]
-            label += f' CV={cv:5.3f}' if cv < 0.01 else f' CV={cv:4.2f}'
+            cv = 100*props["IPI-CV"]
+            label += f' CV={cv:.1f}%' if cv > 0.5 else f' CV={cv:.2f}%'
         aa = ax.plot(times[:-1][mask], rate[mask], label=label,
                      linestyle='-', **style)
         ab = ax.plot(times[:-1][~mask], rate[~mask],
