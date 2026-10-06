@@ -1675,10 +1675,14 @@ def plot_pulse_rate(ax, eod_props, toffs=0, colors=None,
         if marker_size is not None:
             style['ms'] = marker_size
         label = f'{props["EODf"]:6.1f} Hz'
+        if 'IPI-CV' in props:
+            cv = props["IPI-CV"]
+            label += f' CV={cv:5.3f}' if cv < 0.01 else f' CV={cv:4.2f}'
         aa = ax.plot(times[:-1][mask], rate[mask], label=label,
                      linestyle='-', **style)
-        ax.plot(times[:-1][~mask], rate[~mask], linestyle='none', **style)
-        for a in aa:
+        ab = ax.plot(times[:-1][~mask], rate[~mask],
+                     linestyle='none', **style)
+        for a in aa + ab:
             a.set_picker(8)
             fish_dict[a] = props['index']
         fish_indices.append(props['index'])
