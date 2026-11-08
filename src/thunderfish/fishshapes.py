@@ -989,7 +989,7 @@ def plot_fish(ax, fish, pos=(0, 0), direction=(1, 0), size=20.0, bend=0, scaley=
     trans.rotate(angle)
     #trans.scale(dxu/dyu, dyu/dxu)   # what is the right scaling????
     trans.scale(1, scaley)
-    trans.translate(*pos)
+    trans.translate(*pos[:2])
     for part, verts in fish.items():
         if part == 'eye':
             if eyekwargs is not None:

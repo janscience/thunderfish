@@ -277,7 +277,8 @@ def efield(pos, *args):
         A single (1D) position is also accepted.
     args: list of tuples
         Each tuple contains as the first argument the position of monopoles
-        (2D array of floats), and as the second argument the corresponding charges
+        (2D array of floats, same or more columns as pos),
+        and as the second argument the corresponding charges
         (array of floats). Use efish_monopoles() to generate monopoles and
         corresponding charges.
 
@@ -286,18 +287,23 @@ def efield(pos, *args):
     field: array of floats
         The electric field components for each position in `pos`.
     """
-    pos = np.asarray(pos)
-    onedim = len(pos.shape) == 1
+    ppos = np.asarray(pos)
+    onedim = pos.ndim == 1
     if onedim:
-        pos = pos.reshape(-1, len(pos))
-    field = np.zeros(pos.shape)
+        ppos = ppos.reshape(-1, len(pos))
+    if len(args) == 0:
+        return np.zeros(pos.shape)
+    pdim = len(args[0][0][0]) if len(args[0]) > 0 else ppos.shape[1]
+    field = np.zeros((len(pos), pdim))
+    while pdim > ppos.shape[1]:
+        ppos = np.column_stack((ppos, np.zeros(len(ppos))))
     for poles, charges in args:
         for p, c in zip(poles, charges):
-            r = pos - p
+            r = ppos - p
             rnorm = np.linalg.norm(r, axis=1)
             rnorm[np.abs(rnorm) < 1e-12] = 1.0e-12
             fac = c/rnorm**3
-            field += r*fac[:,np.newaxis]
+            field += r*fac[:, np.newaxis]
     return field[0] if onedim else field
 
 
