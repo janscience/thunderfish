@@ -1265,6 +1265,7 @@ def surface_normals(xx, yy, zz):
         Mesh grid of y coordinates.
     zz: 2D array of floats
         z-coordinates of surface on the xx and yy coordinates.
+        As returned, for example, by fish_surface().
 
     Returns
     -------
@@ -1282,7 +1283,7 @@ def surface_normals(xx, yy, zz):
     ny = np.zeros(xx.shape)
     ny[:-1,:] = -np.diff(zz, axis=0)/dy
     nz = np.ones(xx.shape)
-    norm = np.sqrt(nx*nx+ny*ny+1)
+    norm = np.sqrt(nx*nx + ny*ny + 1)
     return nx/norm, ny/norm, nz/norm
 
 

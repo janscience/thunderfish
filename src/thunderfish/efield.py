@@ -284,8 +284,8 @@ def efield(pos, *args):
 
     Returns
     -------
-    field: array of floats
-        The electric field components for each position in `pos`.
+    field: 2D array of floats
+        The electric field components (columns) for each position in `pos` (rows).
     """
     ppos = np.asarray(pos)
     onedim = ppos.ndim == 1
@@ -294,11 +294,16 @@ def efield(pos, *args):
     if len(args) == 0:
         return np.zeros(pos.shape)
     pdim = len(args[0][0][0]) if len(args[0]) > 0 else ppos.shape[1]
-    field = np.zeros((len(pos), pdim))
     while pdim > ppos.shape[1]:
         ppos = np.column_stack((ppos, np.zeros(len(ppos))))
+    if pdim < ppos.shape[1]:
+        pdim = ppos.shape[1]
+    field = np.zeros((len(pos), pdim))
     for poles, charges in args:
-        for p, c in zip(poles, charges):
+        ppoles = np.asarray(poles)
+        while ppoles.shape[1] < ppos.shape[1]:
+            ppoles = np.column_stack((ppoles, np.zeros(len(ppoles))))
+        for p, c in zip(ppoles, charges):
             r = ppos - p
             rnorm = np.linalg.norm(r, axis=1)
             rnorm[np.abs(rnorm) < 1e-12] = 1.0e-12
@@ -314,14 +319,14 @@ def efield_meshgrid(xx, yy, zz, *args):
     
     Parameters
     ----------
-    xx: 2D array of floats
+    xx: 2D or 3D array of floats
         Range of x coordinates as returned by numpy.meshgrid().
-    yy: 2D array of floats
+    yy: 2D or 3D array of floats
         Range of y coordinates as returned by numpy.meshgrid().
-    zz: None or 2D array of floats
+    zz: None or 2D or 3D array of floats
         z coordinates on the meshgrid defined by xx and yy.
         If provided, poles in args must be 3D.
-        If None then treat it as a 2D problem with poles in args providing 2D coordinate.
+        If None then treat it as a 2D problem with poles in args providing 2D coordinates.
     args: list of tuples
         Each tuple contains as the first argument the position (2D or 3D) of monopoles
         (2D array of floats), and as the second argument the corresponding charges
@@ -330,22 +335,9 @@ def efield_meshgrid(xx, yy, zz, *args):
 
     Returns
     -------
-    pot: 2D array of floats
-        The potential for the mesh grid defined by xx and yy and evaluated
-        at (xx, yy, zz).
-
-    Returns
-    -------
-    fieldx: 2D array of floats
-        The x-coordinate of the electric field for the mesh grid
-        defined by xx and yy and evaluated at (xx, yy, zz).
-    fieldy: 2D array of floats
-        The y-coordinate of the electric field for the mesh grid
-        defined by xx and yy and evaluated at (xx, yy, zz).
-    fieldz: 2D array of floats
-        The z-coordinate of the electric field for the mesh grid
-        defined by xx and yy and evaluated at (xx, yy, zz).
-        This is only returned if zz is not None.
+    field: array of floats
+        For each position defined by the meshgrid (first 2 or 3 dimensions) the electric field components
+        (last dimension).
 
     Example
     -------
@@ -362,21 +354,20 @@ def efield_meshgrid(xx, yy, zz, *args):
     poles2 = efish_monopoles(*fish2)
     poles3 = object_monopoles((-6, 0), 1.0, -0.5, poles1, poles2)
     allpoles = (poles1, poles2, poles3)
-    fieldx, fieldy = efield_meshgrid(xx, yy, None, *allpoles)
-    u = squareroot_transform(fieldx, 0)
-    v = squareroot_transform(fieldy, 0)
-    ax.quiver(qx, qy, u, v, units='xy', angles='uv', scale=2, scale_units='xy',
+    field = efield_meshgrid(xx, yy, None, *allpoles)
+    uv = squareroot_transform(field, 0)
+    ax.quiver(xx, yy, uv[:, :, 0], uv[:, :, 1], units='xy', angles='uv', scale=2, scale_units='xy',
               width=0.07, headwidth=5)
     ``` 
     """
     if zz is None:
-        pos = np.vstack((xx.ravel(), yy.ravel())).T
+        pos = np.vstack((xx.flat, yy.flat)).T
         ef = efield(pos, *args)
-        return ef[:,0].reshape(xx.shape), ef[:,1].reshape(xx.shape)
+        return ef.reshape(xx.shape + (ef.shape[1],))
     else:
-        pos = np.vstack((xx.ravel(), yy.ravel(), zz.ravel())).T
+        pos = np.vstack((xx.flat, yy.flat, zz.flat)).T
         ef = efield(pos, *args)
-        return ef[:,0].reshape(xx.shape), ef[:,1].reshape(xx.shape), ef[:,2].reshape(xx.shape)
+        return ef.reshape(xx.shape + (ef.shape[1],))
 
 
 def projection(ex, ey, ez, nx, ny, nz):
@@ -396,6 +387,11 @@ def projection(ex, ey, ez, nx, ny, nz):
         y-coordinates of the surface normals.
     nz: array of floats
         z-coordinates of the surface normals.
+
+    Returns
+    -------
+    prj: array of floats
+        Projection of the field vectors onto the normals.
     """
     ef = np.vstack((ex.ravel(), ey.ravel(), ez.ravel())).T
     nf = np.vstack((nx.ravel(), ny.ravel(), nz.ravel())).T
@@ -503,9 +499,9 @@ def squareroot_transform(values, thresh=0.0):
         The transformed (square-rooted and thresholded) values.
     """
     values = np.array(values)
-    sel = values>=0.0
-    values[sel] = values[sel]**0.5
-    values[np.logical_not(sel)] = -((-values[np.logical_not(sel)])**0.5)
+    mask = values>=0.0
+    values[mask] = values[mask]**0.5
+    values[np.logical_not(mask)] = -((-values[np.logical_not(mask)])**0.5)
     if thresh is None:
         thresh = min(np.max(values), -np.min(values))
     if thresh > 0:
@@ -592,10 +588,9 @@ def main():
     # electric field vectors:
     n = 5
     qx, qy = np.meshgrid(x[n::2*n], y[n::2*n])
-    fieldx, fieldy = efield_meshgrid(qx, qy, None, *allpoles)
-    u = squareroot_transform(fieldx, 0)
-    v = squareroot_transform(fieldy, 0)
-    ax.quiver(qx, qy, u, v, units='xy', angles='uv', scale=2, scale_units='xy',
+    field = efield_meshgrid(qx, qy, None, *allpoles)
+    uv = squareroot_transform(field, 0)
+    ax.quiver(qx, qy, uv[:, :, 0], uv[:, :, 1], units='xy', angles='uv', scale=2, scale_units='xy',
               width=0.07, headwidth=5)
     # field line:
     bounds = [[-maxx, -maxy], [maxx, maxy]]
