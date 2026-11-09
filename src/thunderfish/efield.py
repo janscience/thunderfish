@@ -288,7 +288,7 @@ def efield(pos, *args):
         The electric field components for each position in `pos`.
     """
     ppos = np.asarray(pos)
-    onedim = pos.ndim == 1
+    onedim = ppos.ndim == 1
     if onedim:
         ppos = ppos.reshape(-1, len(pos))
     if len(args) == 0:
