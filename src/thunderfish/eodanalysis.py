@@ -1317,7 +1317,7 @@ def load_analysis(file_pathes):
     ----------
     file_pathes: list of str or Path
         Pathes of the analysis files of a single recording to be loaded.
-        This list may contain also a single zip filecontaining all the
+        This list may contain also a single zip file containing all the
         analysis files.
 
     Returns
