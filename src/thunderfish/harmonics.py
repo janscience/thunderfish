@@ -1638,6 +1638,7 @@ def colors_markers():
 def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
                          skip_bad=False, sort_by_freq=True, label_power=False,
                          colors=None, markers=None, marker_size=18,
+                         marker_offs=0, psd_freqs=None, psd=None,
                          legend_rows=8, **kwargs):
     """Mark decibel power of fundamentals and their harmonics in a plot.
 
@@ -1665,6 +1666,14 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         If not None list of markers for plotting each group
     marker_size: float
         Maximum size of markers used to mark the pulses.
+    marker_offs: float
+        Offset that is added to the markers y-coordinate.
+    psd_freqs: array of float or None
+        If provided, frequencies of the power spectrum.
+    psd: array of float or None
+        If provided, power spectrum (linear, not decible).
+        The power spectrum is not plotted, but it is used to adjust the height
+        of markers of the harmonic groups.
     legend_rows: int
         Maximum number of rows to be used for the legend.
     kwargs: 
@@ -1718,6 +1727,11 @@ def plot_harmonic_groups(ax, group_list, indices=None, max_groups=0,
         group = group_list[i]
         x = group[:, 0]
         y = decibel(group[:, 1])
+        if psd_freqs is not None and psd is not None:
+            for j in range(len(x)):
+                fi = np.argmin(np.abs(psd_freqs - x[j]))
+                y[j] = np.max(decibel(psd[fi - 5:fi + 5]))
+        y += marker_offs
         msize = marker_size*(0.3 + 0.7*(powers[i]/max_power)**0.25)
         color_kwargs = {}
         if colors is not None:
@@ -1774,9 +1788,9 @@ def plot_psd_harmonic_groups(ax, psd_freqs, psd, group_list,
     ----------
     ax: axis for plot
         Axis used for plotting.
-    psd_freqs: array
+    psd_freqs: array of float
         Frequencies of the power spectrum.
-    psd: array
+    psd: array of float
         Power spectrum (linear, not decible).
     group_list: list of 2-D arrays
         Lists of harmonic groups as returned by extract_fundamentals() and
