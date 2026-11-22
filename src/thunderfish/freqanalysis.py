@@ -35,7 +35,8 @@ musical_intervals = {
     'minor third': (6/5, 6, 5, 3),        # 1.2
     'major third': (5/4, 5, 4, 4),        # 1.25
     'forth': (4/3, 4, 3, 5),              # 1.3333
-    'tritone': (45/32, 45, 32, 6),        # 1.4063, half way between forth and fifth: 17/6/2=1.4167, sqrt(2)=1.4142
+    'tritone': (7/5, 7, 5, 6),            # 1.4
+    #'tritone': (45/32, 45, 32, 6),        # 1.4063, half way between forth and fifth: 17/6/2=1.4167, sqrt(2)=1.4142
     'fifth': (3/2, 3, 2, 7),              # 1.5
     'minor sixth': (8/5, 8, 5, 8),        # 1.6
     'major sixth': (5/3, 5, 3, 9),        # 1.6667
