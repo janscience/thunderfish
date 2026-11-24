@@ -201,7 +201,7 @@ def wavefish_spectrum(fish):
     return coeffs
 
 
-def wavefish_eods(fish='Eigenmannia', frequency=100.0, rate=44100.0,
+def wavefish_eods(fish='Eigenmannia', frequency=100.0, ratetime=44100.0,
                   duration=1.0, phase0=0.0, noise_std=0.0):
     """Simulate EOD waveform of a wave-type fish.
                   
@@ -222,10 +222,11 @@ def wavefish_eods(fish='Eigenmannia', frequency=100.0, rate=44100.0,
     frequency: float or array of floats
         EOD frequency of the fish in Hertz. Either fixed number or array for
         time-dependent frequencies.
-    rate: float
-        Sampling rate in Hertz.
+    ratetime: float or array of float
+        Sampling rate in Hertz or sampling times in seconds.
     duration: float
-        Duration of the generated data in seconds. Only used if frequency is scalar.
+        Duration of the generated data in seconds. Only used if frequency
+        is scalar and ratetime is scalar.
     phase0: float
         Phase offset of the EOD waveform in radians.
     noise_std: float
@@ -247,10 +248,16 @@ def wavefish_eods(fish='Eigenmannia', frequency=100.0, rate=44100.0,
     coeffs = wavefish_spectrum(fish)
     # compute phase:
     if np.isscalar(frequency):
-        phase = np.arange(0, duration, 1.0/rate)
-        phase *= frequency
+        if np.isscalar(ratetime):
+            phase = np.arange(0, duration, 1.0/ratetime)
+            phase *= frequency
+        else:
+            phase = ratetime*frequency
     else:
-        phase = np.cumsum(frequency)/rate
+        if np.isscalar(ratetime):
+            phase = np.cumsum(frequency)/ratetime
+        else:
+            phase = np.cumsum(frequency)/np.mean(np.diff(ratetime))
     # generate EOD:
     iomega = 1j*2*np.pi*phase
     data = np.zeros(len(phase))
